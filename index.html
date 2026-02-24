@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jogo de Digitação Amigável</title>
     <style>
-        /* =========================================
-           CSS: ESTILOS VISUAIS E ACESSIBILIDADE
-           ========================================= */
+        /* CSS MANTIDO (Igual ao anterior) */
         :root {
             --bg-color: #e6f2ff;
             --text-color: #333333;
@@ -33,66 +31,29 @@
         body.flash-green { background-color: var(--success-color); }
         body.flash-red { background-color: var(--error-color); }
 
-        header {
-            padding: 20px;
-            background-color: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
+        header { padding: 20px; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         h1, h2 { margin: 10px 0; }
 
         .progress-container {
-            width: 80%;
-            max-width: 600px;
-            height: 20px;
-            background-color: #ddd;
-            border-radius: 10px;
-            margin: 10px auto;
-            overflow: hidden;
+            width: 80%; max-width: 600px; height: 20px; background-color: #ddd;
+            border-radius: 10px; margin: 10px auto; overflow: hidden;
         }
 
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background-color: #4CAF50;
-            transition: width 0.4s ease;
-        }
-
+        .progress-bar { height: 100%; width: 0%; background-color: #4CAF50; transition: width 0.4s ease; }
         .stars { font-size: 2rem; margin-top: 10px; }
 
         main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            padding: 20px;
-            overflow-y: auto;
-            position: relative;
+            flex: 1; display: flex; flex-direction: column; justify-content: flex-start;
+            align-items: center; padding: 20px; overflow-y: auto; position: relative;
         }
 
-        /* O truque do input oculto para resolver o bug do Mac/Acentos */
-        #hidden-input {
-            position: absolute;
-            opacity: 0;
-            pointer-events: none;
-        }
+        #hidden-input { position: absolute; opacity: 0; pointer-events: none; }
 
         #text-display {
-            font-size: 3rem;
-            letter-spacing: 2px;
-            background: white;
-            padding: 20px 40px;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            word-wrap: break-word;
-            max-width: 90%;
-            max-height: 40vh;
-            overflow-y: auto;
-            text-align: left;
-            line-height: 1.5;
-            cursor: text; /* Indica que é clicável */
+            font-size: 3rem; letter-spacing: 2px; background: white; padding: 20px 40px;
+            border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px;
+            word-wrap: break-word; max-width: 90%; max-height: 40vh; overflow-y: auto;
+            text-align: left; line-height: 1.5; cursor: text;
         }
 
         .char { color: #ccc; }
@@ -100,15 +61,9 @@
         .char.current { color: #007bff; text-decoration: underline; font-weight: bold; background-color: #e6f2ff; }
 
         button {
-            font-size: 1.5rem;
-            padding: 15px 40px;
-            background-color: var(--primary-btn);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            margin: 10px;
+            font-size: 1.5rem; padding: 15px 40px; background-color: var(--primary-btn);
+            color: white; border: none; border-radius: 10px; cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin: 10px;
         }
 
         #change-text-btn { background-color: var(--secondary-btn); display: none; }
@@ -129,21 +84,19 @@
         <p id="feedback-msg">Clique em "Começar" para iniciar!</p>
         
         <input type="text" id="hidden-input" autocomplete="off" spellcheck="false">
-        
         <div id="text-display" onclick="document.getElementById('hidden-input').focus()"></div>
         
         <div>
-            <button id="action-btn" onclick="startGame()">Começar</button>
+            <button id="action-btn" onclick="initGame()">Começar</button>
             <button id="change-text-btn" onclick="loadPhaseFinalText()">Trocar Texto</button>
         </div>
     </main>
 
     <script>
         /* =========================================
-           JAVASCRIPT: DADOS E LÓGICA
+           JAVASCRIPT: DADOS E LÓGICA CORRIGIDOS
            ========================================= */
         
-        // Função para embaralhar os arrays (Tornar o jogo aleatório sempre)
         function shuffle(array) {
             let currentIndex = array.length, randomIndex;
             while (currentIndex !== 0) {
@@ -154,20 +107,39 @@
             return array;
         }
 
-        // 1. Bancos de Palavras Expandidos
-        // Adicionei várias palavras, o sistema vai embaralhar e pegar apenas uma quantidade X por fase.
+        // 1. Bancos de Palavras Gigantes
         const poolVowels = ["A", "E", "I", "O", "U"];
-        const poolConsonants = ["B", "C", "D", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "V", "X", "Z"];
-        const poolShortWords = ["PAI", "MAE", "VO", "TIA", "TIO", "BEM", "MAL", "SIM", "NAO", "SOL", "LUA", "DIA", "PAZ", "LUZ", "MAR", "COR"];
-        const poolMediumWords = ["MESA", "CASA", "BOLO", "CAFE", "GATO", "RATO", "DOCE", "AGUA", "FOGO", "TERRA", "VENTO", "LIVRO", "LETRA", "TEMPO", "NOITE"];
-        const poolLongWords = ["CACHORRO", "MERCADO", "TELEFONE", "COMPUTADOR", "INTERNET", "FAMILIA", "TRABALHO", "NATUREZA", "ESPERANCA", "FELICIDADE", "AMIZADE"];
+        const poolConsonants = ["B", "C", "D", "F", "G", "J", "L", "M", "N", "P", "R", "S", "T", "V", "Z"];
+        const poolShortWords = [
+            "PAI", "MAE", "AVO", "TIA", "TIO", "BEM", "MAL", "SIM", "NAO", "SOL", "LUA", "DIA", "PAZ", "LUZ", 
+            "MAR", "COR", "CAO", "GATO", "RUA", "CASA", "MESA", "FOGO", "AGUA", "BOLO", "DOCE", "PATO", "RATO", 
+            "MATO", "DADO", "DEDO", "BOTA", "BOLA", "FACA", "FADA", "LAGO", "LOBO", "MALA", "MOLA", "NATA", 
+            "NEVE", "PANO", "PENA", "REDE", "RETA", "SALA", "SELO", "TELA", "TIME", "VACA", "VILA"
+        ];
+        const poolMediumWords = [
+            "MERCADO", "CACHORRO", "BRASIL", "ESCOLA", "CIDADE", "MENINO", "MENINA", "ARVORE", "JANELA", "CADERNO", 
+            "CANECA", "CANETA", "COMIDA", "BEBIDA", "FRUTAS", "BANANA", "MACA", "LARANJA", "TOMATE", "BATATA", 
+            "CENOURA", "ALFACE", "FRANGO", "QUEIJO", "LEITE", "CAFE", "BONECA", "CARRINHO", "SAPATO", "CAMISA", 
+            "CALCA", "VESTIDO", "CADEIRA", "RELOGIO", "PAREDE", "QUADRO", "ESPELHO", "SABAO", "TOALHA", "ESCOVA", 
+            "CHAVE", "PORTA", "TELHADO", "JARDIM", "FLORES", "GRAMA", "TERRA", "PEDRA", "AREIA", "POESIA"
+        ];
+        const poolLongWords = [
+            "TELEFONE", "COMPUTADOR", "INTERNET", "FAMILIA", "TRABALHO", "NATUREZA", "ESPERANCA", "FELICIDADE", 
+            "AMIZADE", "TELEVISAO", "GELADEIRA", "BICICLETA", "MOTOCICLETA", "AUTOMOVEL", "AEROPORTO", "BIBLIOTECA", 
+            "HOSPITAL", "FARMACIA", "RESTAURANTE", "PADARIA", "PROFESSOR", "ESTUDANTE", "ENGENHEIRO", "ADVOGADO", 
+            "MEDICO", "ENFERMEIRO", "POLICIAL", "BOMBEIRO", "CARTEIRO", "ELETRICISTA", "ENCANADOR", "PADEIRO", 
+            "MOTORISTA", "CANTORA", "DIRETOR", "PRESIDENTE", "MINISTRO", "PREFEITO", "VEREADOR", "DEPUTADO"
+        ];
         const poolPhrases = [
-            "Bom dia, tudo bem?", "Meu nome é Maria.", "Eu gosto de cafe.", 
-            "O dia esta lindo hoje.", "Vamos aprender a digitar.", "A pratica leva a perfeicao.",
-            "O cachorro latiu alto.", "Fui ao mercado comprar pao.", "A internet nos conecta."
+            "Bom dia, tudo bem?", "Meu nome é Maria.", "Eu gosto de cafe.", "O dia esta lindo hoje.", 
+            "Vamos aprender a digitar.", "A pratica leva a perfeicao.", "O cachorro latiu alto.", 
+            "Fui ao mercado comprar pao.", "A internet nos conecta.", "Hoje vai chover a tarde.", 
+            "Gosto de ler livros bons.", "Assisti um filme legal.", "A comida estava deliciosa.", 
+            "Vou dormir cedo hoje.", "Amanha e um novo dia.", "A vida e bela e passageira.", 
+            "O amor vence tudo.", "A paz mundial e o objetivo.", "A saude e o mais importante.", 
+            "A educacao transforma o mundo."
         ];
 
-        // Textos Literários (Fase Final)
         const literaryTexts = [
             "Marcela amou-me durante quinze meses e onze contos de réis; nada menos.", 
             "O poeta é um fingidor. Finge tão completamente que chega a fingir que é dor a dor que deveras sente.", 
@@ -178,19 +150,18 @@
             "As pessoas não são más, elas só estão perdidas. O tempo é o melhor autor; sempre encontra um final perfeito."
         ];
 
-        // Criando as fases dinamicamente
         let phases = [];
 
         function buildPhases() {
-            // Pegamos quantidades aleatórias do banco para cada partida
             phases = [
-                { name: "Fase 1: Vogais", words: shuffle([...poolVowels]) }, // Pega todas as vogais embaralhadas
-                { name: "Fase 2: Consoantes", words: shuffle([...poolConsonants]).slice(0, 8) }, // 8 consoantes aleatórias
-                { name: "Fase 3: Palavras Curtas", words: shuffle([...poolShortWords]).slice(0, 10) }, // 10 palavras curtas
-                { name: "Fase 4: Palavras Médias", words: shuffle([...poolMediumWords]).slice(0, 10) },
-                { name: "Fase 5: Palavras Longas", words: shuffle([...poolLongWords]).slice(0, 10) },
-                { name: "Fase 6: Frases", words: shuffle([...poolPhrases]).slice(0, 5) },
-                { name: "Fase Final: Texto Literário", words: [] } // O texto será gerido à parte
+                // Gera arrays aleatórios longos para as fases
+                { name: "Fase 1: Vogais", words: Array.from({length: 15}, () => poolVowels[Math.floor(Math.random() * poolVowels.length)]) },
+                { name: "Fase 2: Consoantes", words: Array.from({length: 15}, () => poolConsonants[Math.floor(Math.random() * poolConsonants.length)]) },
+                { name: "Fase 3: Palavras Curtas", words: shuffle([...poolShortWords]).slice(0, 20) }, // 20 palavras
+                { name: "Fase 4: Palavras Médias", words: shuffle([...poolMediumWords]).slice(0, 20) }, // 20 palavras
+                { name: "Fase 5: Palavras Longas", words: shuffle([...poolLongWords]).slice(0, 15) }, // 15 palavras
+                { name: "Fase 6: Frases", words: shuffle([...poolPhrases]).slice(0, 10) }, // 10 frases
+                { name: "Fase Final: Texto Literário", words: [] } 
             ];
         }
 
@@ -212,28 +183,35 @@
         const phaseNumber = document.getElementById("phase-number");
         const phaseName = document.getElementById("phase-name");
 
-        // 3. Inicialização
-        function startGame() {
-            buildPhases(); // Constrói as fases aleatórias
+        // 3. Funções Iniciais (Correção do Bug)
+        
+        // Roda apenas UMA VEZ no início do jogo inteiro
+        function initGame() {
+            buildPhases(); 
+            currentPhaseIndex = 0;
+            playCurrentPhase();
+        }
+
+        // Roda a cada nova fase, garantindo que não zera o jogo
+        function playCurrentPhase() {
             isPlaying = true;
             errors = 0;
-            currentPhaseIndex = 0;
             currentWordIndex = 0;
             actionBtn.style.display = "none";
             feedbackMsg.innerText = "Digite a letra sublinhada.";
-            hiddenInput.focus(); // Foca no input escondido
+            hiddenInput.focus(); 
             loadWord();
             updateUI();
         }
 
         function loadWord() {
-            if (currentPhaseIndex === phases.length - 1) { // Última fase
+            if (currentPhaseIndex === phases.length - 1) { 
                 loadPhaseFinalText();
             } else {
                 currentText = phases[currentPhaseIndex].words[currentWordIndex];
                 renderText();
             }
-            hiddenInput.value = ""; // Limpa o input escondido
+            hiddenInput.value = ""; 
         }
 
         function loadPhaseFinalText() {
@@ -282,31 +260,26 @@
             setTimeout(() => document.body.classList.remove(`flash-${type}`), 300);
         }
 
-        // 4. Capturando a Digitação Real (Lidando com Mac e Acentos)
-        // Usamos 'input' no campo escondido. Ele só dispara quando o caractere final é formado (ex: ~ + a = ã).
+        // 4. Capturando a Digitação
         hiddenInput.addEventListener("input", (event) => {
             if (!isPlaying) {
                 hiddenInput.value = "";
                 return;
             }
 
-            // Pega a última letra que entrou no input
             const typedVal = hiddenInput.value;
             const typedChar = typedVal.slice(-1); 
             
-            if (!typedChar) return; // Se apagou algo, ignora
+            if (!typedChar) return;
 
             const expectedChar = currentText[charIndex];
             const spans = textDisplay.querySelectorAll("span");
             
             let isCorrect = false;
 
-            // Validação
             if (currentPhaseIndex === phases.length - 1) {
-                isCorrect = (typedChar === expectedChar); // Última fase exige exatidão de maiúsculas e acentos
+                isCorrect = (typedChar === expectedChar); 
             } else {
-                // Fases anteriores ignoram acentos complexos e maiúsculas para facilitar
-                // Compara removendo acentos da expectativa se necessário, ou só minúsculas
                 isCorrect = (typedChar.toLowerCase() === expectedChar.toLowerCase()); 
             }
 
@@ -345,11 +318,9 @@
                 }
             }
             
-            // Mantemos o input limpo para não pesar
             hiddenInput.value = ""; 
         });
 
-        // Garantir que o input escondido mantenha o foco se o usuário clicar na tela
         document.body.addEventListener("click", () => {
             if(isPlaying) hiddenInput.focus();
         });
@@ -360,13 +331,14 @@
             return "⭐ Continue praticando!";
         }
 
+        // 5. Finalizando a Fase
         function finishPhase() {
             isPlaying = false;
             progress.style.width = "100%";
             starsDisplay.innerText = calculateStars();
             
-            currentPhaseIndex++;
-            currentWordIndex = 0;
+            currentPhaseIndex++; // Avançamos o nível
+            currentWordIndex = 0; // Zeramos as palavras do novo nível
             errors = 0;
             changeTextBtn.style.display = "none";
 
@@ -379,6 +351,9 @@
             } else {
                 feedbackMsg.innerText = "Fase concluída! " + calculateStars();
                 actionBtn.innerText = "Próxima Fase";
+                
+                // O Segredo da correção: o botão agora aponta para playCurrentPhase!
+                actionBtn.onclick = () => playCurrentPhase(); 
                 textDisplay.innerHTML = "🌟";
             }
             
