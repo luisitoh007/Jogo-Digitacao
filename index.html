@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo de Digitação Amigável</title>
+    <style>
+        /* =========================================
+           CSS: ESTILOS VISUAIS E ACESSIBILIDADE
+           ========================================= */
+        :root {
+            --bg-color: #e6f2ff;
+            --text-color: #333333;
+            --success-color: #d4edda;
+            --error-color: #f8d7da;
+            --primary-btn: #4CAF50;
+            --secondary-btn: #FF9800; /* Cor para o botão de trocar texto */
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            transition: background-color 0.3s;
+        }
+
+        body.flash-green { background-color: var(--success-color); }
+        body.flash-red { background-color: var(--error-color); }
+
+        header {
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        h1, h2 { margin: 10px 0; }
+
+        .progress-container {
+            width: 80%;
+            max-width: 600px;
+            height: 20px;
+            background-color: #ddd;
+            border-radius: 10px;
+            margin: 10px auto;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #4CAF50;
+            transition: width 0.4s ease;
+        }
+
+        .stars {
+            font-size: 2rem;
+            margin-top: 10px;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Mudado para o texto longo caber melhor */
+            align-items: center;
+            padding: 20px;
+            overflow-y: auto; /* Permite rolar a tela se necessário */
+        }
+
+        #text-display {
+            font-size: 3rem; /* Tamanho ligeiramente menor para textos longos */
+            letter-spacing: 2px;
+            background: white;
+            padding: 20px 40px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            word-wrap: break-word;
+            max-width: 90%;
+            max-height: 40vh; /* Altura máxima para não sumir na tela */
+            overflow-y: auto; /* Barra de rolagem interna se o texto for muito grande */
+            text-align: left; /* Textos longos ficam melhores alinhados à esquerda */
+            line-height: 1.5;
+        }
+
+        .char { color: #ccc; }
+        .char.correct { color: #28a745; font-weight: bold; }
+        .char.current { color: #007bff; text-decoration: underline; font-weight: bold; background-color: #e6f2ff; }
+
+        button {
+            font-size: 1.5rem;
+            padding: 15px 40px;
+            background-color: var(--primary-btn);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+            margin: 10px;
+        }
+
+        button:hover { transform: scale(1.05); }
+
+        #change-text-btn {
+            background-color: var(--secondary-btn);
+            display: none; /* Escondido por padrão */
+        }
+
+        #feedback-msg {
+            font-size: 1.5rem;
+            font-weight: bold;
+            height: 2rem;
+            color: #555;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>Fase <span id="phase-number">1</span>: <span id="phase-name">O Básico</span></h2>
+        <div class="progress-container">
+            <div class="progress-bar" id="progress"></div>
+        </div>
+        <div class="stars" id="stars-display">⭐⭐⭐</div>
+    </header>
+
+    <main>
+        <p id="feedback-msg">Clique em "Começar" para iniciar!</p>
+        <div id="text-display"></div>
+        
+        <div>
+            <button id="action-btn" onclick="startGame()">Começar</button>
+            <button id="change-text-btn" onclick="loadPhase6Text()">Trocar Texto</button>
+        </div>
+    </main>
+
+    <script>
+        /* =========================================
+           JAVASCRIPT: LÓGICA E GAMIFICAÇÃO
+           ========================================= */
+        
+        // 1. Definição das Fases (1 a 5)
+        const phases = [
+            { name: "O Básico (Vogais)", words: ["A", "E", "I", "O", "U"] },
+            { name: "O Básico (Consoantes)", words: ["B", "P", "M", "V", "D"] },
+            { name: "Palavras Curtas", words: ["PAI", "MALA", "RUA", "SOL"] },
+            { name: "Palavras do Dia a Dia", words: ["MERCADO", "CACHORRO", "BRASIL"] },
+            { name: "Frases Curtas", words: ["Bom dia.", "Tudo bem com voce?"] }
+        ];
+
+        // Textos da Fase 6 (Textos Literários)
+        const literaryTexts = [
+            "Marcela amou-me durante quinze meses e onze contos de réis; nada menos. Meu pai, logo que teve aragem de meus amores, achou que era tempo de me enviar para a Europa.", // Machado de Assis
+            "O poeta é um fingidor. Finge tão completamente que chega a fingir que é dor a dor que deveras sente.", // Fernando Pessoa
+            "Renda-se, como eu me rendi. Mergulhe no que você não conhece como eu mergulhei. Não se preocupe em entender, viver ultrapassa qualquer entendimento.", // Clarice Lispector
+            "O correr da vida embrulha tudo. A vida é assim: esquenta e esfria, aperta e daí afrouxa, sossega e depois desinquieta. O que ela quer da gente é coragem.", // Guimarães Rosa
+            "O sertanejo é, antes de tudo, um forte. Não tem o raquitismo exaustivo dos mestiços neurastênicos do litoral.", // Euclides da Cunha
+            "Não sou alegre nem sou triste: sou poeta. Irmão das coisas fugidias, não sinto gozo nem tormento. Atravesso noites e dias no vento.", // Cecília Meireles
+            "No meio do caminho tinha uma pedra. Tinha uma pedra no meio do caminho. Nunca me esquecerei desse acontecimento na vida de minhas retinas tão fatigadas.", // Carlos Drummond de Andrade
+            "A natureza fez o homem feliz e bom, mas a sociedade deprava-o e torna-o miserável.", // Rousseau (Traduzido)
+            "Tudo vale a pena se a alma não é pequena. Quem quer passar além do Bojador tem que passar além da dor.", // Fernando Pessoa
+            "A arte de viver é simplesmente a arte de conviver... simplesmente, disse eu? Mas como é difícil!" // Mario Quintana
+        ];
+
+        // 2. Variáveis de Estado
+        let currentPhaseIndex = 0;
+        let currentWordIndex = 0;
+        let currentText = "";
+        let charIndex = 0;
+        let errors = 0;
+        let isPlaying = false;
+
+        const textDisplay = document.getElementById("text-display");
+        const feedbackMsg = document.getElementById("feedback-msg");
+        const actionBtn = document.getElementById("action-btn");
+        const changeTextBtn = document.getElementById("change-text-btn");
+        const progress = document.getElementById("progress");
+        const starsDisplay = document.getElementById("stars-display");
+        const phaseNumber = document.getElementById("phase-number");
+        const phaseName = document.getElementById("phase-name");
+
+        // 3. Funções do Jogo
+        function startGame() {
+            isPlaying = true;
+            errors = 0;
+            actionBtn.style.display = "none";
+            feedbackMsg.innerText = "Digite a letra sublinhada.";
+            loadWord();
+            updateUI();
+        }
+
+        function loadWord() {
+            // Verifica se estamos na Fase 6 (índice 5)
+            if (currentPhaseIndex === 5) {
+                loadPhase6Text();
+            } else {
+                currentText = phases[currentPhaseIndex].words[currentWordIndex];
+                renderText();
+            }
+        }
+
+        // Função específica para carregar um texto aleatório na Fase 6
+        function loadPhase6Text() {
+            const randomIndex = Math.floor(Math.random() * literaryTexts.length);
+            currentText = literaryTexts[randomIndex];
+            renderText();
+            
+            // Exibe o botão de trocar texto
+            changeTextBtn.style.display = "inline-block";
+            phaseName.innerText = "O Mestre da Digitação (Texto Livre)";
+        }
+
+        // Cria o HTML das letras na tela
+        function renderText() {
+            charIndex = 0;
+            textDisplay.innerHTML = "";
+            for (let i = 0; i < currentText.length; i++) {
+                const span = document.createElement("span");
+                span.innerText = currentText[i];
+                span.classList.add("char");
+                if (i === 0) span.classList.add("current");
+                textDisplay.appendChild(span);
+            }
+        }
+
+        function updateUI() {
+            phaseNumber.innerText = currentPhaseIndex + 1;
+            
+            if (currentPhaseIndex < 5) {
+                phaseName.innerText = phases[currentPhaseIndex].name;
+                const totalWords = phases[currentPhaseIndex].words.length;
+                const progressPercent = (currentWordIndex / totalWords) * 100;
+                progress.style.width = progressPercent + "%";
+            } else {
+                // Na fase 6, o progresso é baseado nos caracteres digitados do texto longo
+                progress.style.width = "0%";
+            }
+        }
+
+        function updatePhase6Progress() {
+            if (currentPhaseIndex === 5) {
+                const progressPercent = (charIndex / currentText.length) * 100;
+                progress.style.width = progressPercent + "%";
+            }
+        }
+
+        function flashScreen(type) {
+            document.body.classList.add(`flash-${type}`);
+            setTimeout(() => document.body.classList.remove(`flash-${type}`), 300);
+        }
+
+        function calculateStars() {
+            if (errors === 0) return "⭐⭐⭐ Impecável!";
+            if (errors <= 5) return "⭐⭐ Muito bom!";
+            return "⭐ Você chegou lá!";
+        }
+
+        // 4. Capturando a Digitação
+        document.addEventListener("keydown", (event) => {
+            if (!isPlaying) return;
+
+            // Ignoramos o processamento direto das teclas de modificação,
+            // pois o navegador juntará o "Shift" + "Letra" e nos dará o caractere final no próximo keydown.
+            if (event.key === "Shift" || event.key === "CapsLock" || event.key === "Dead" || event.key === "Alt" || event.key === "Control") return;
+
+            const expectedChar = currentText[charIndex];
+            const spans = textDisplay.querySelectorAll("span");
+            
+            let isCorrect = false;
+
+            // Lógica de validação: Fase 6 é rigorosa (Case Sensitive), Fases 1-5 são flexíveis
+            if (currentPhaseIndex === 5) {
+                isCorrect = (event.key === expectedChar); // Exige acentos e maiúsculas exatas
+            } else {
+                isCorrect = (event.key.toLowerCase() === expectedChar.toLowerCase()); // Ignora maiúsculas/minúsculas
+            }
+
+            if (isCorrect) {
+                spans[charIndex].classList.remove("current");
+                spans[charIndex].classList.add("correct");
+                flashScreen("green");
+                charIndex++;
+                updatePhase6Progress();
+
+                // Fim da palavra (Fases 1-5) ou Fim do Texto (Fase 6)
+                if (charIndex === currentText.length) {
+                    if (currentPhaseIndex === 5) {
+                        finishPhase(); // Terminou o texto longo
+                    } else {
+                        currentWordIndex++;
+                        if (currentWordIndex >= phases[currentPhaseIndex].words.length) {
+                            finishPhase();
+                        } else {
+                            isPlaying = false;
+                            setTimeout(() => {
+                                loadWord();
+                                updateUI();
+                                isPlaying = true;
+                            }, 500);
+                        }
+                    }
+                } else {
+                    spans[charIndex].classList.add("current");
+                    
+                    // Lógica para rolar a caixa de texto automaticamente se o texto for muito longo
+                    const currentSpan = spans[charIndex];
+                    currentSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            } else {
+                errors++;
+                flashScreen("red");
+                if (currentPhaseIndex === 5) {
+                    feedbackMsg.innerText = "Atenção a maiúsculas, minúsculas e acentos!";
+                }
+            }
+        });
+
+        // 5. Finalizando a Fase
+        function finishPhase() {
+            isPlaying = false;
+            progress.style.width = "100%";
+            starsDisplay.innerText = calculateStars();
+            
+            currentPhaseIndex++;
+            currentWordIndex = 0;
+            changeTextBtn.style.display = "none"; // Esconde o botão de trocar texto ao fim da fase
+
+            if (currentPhaseIndex > 5) {
+                feedbackMsg.innerText = "Parabéns! Você se tornou um Mestre da Digitação!";
+                textDisplay.innerHTML = "🏆🎉🎓";
+                textDisplay.style.textAlign = "center";
+                actionBtn.innerText = "Jogar Tudo Novamente";
+                actionBtn.onclick = () => location.reload();
+            } else {
+                feedbackMsg.innerText = "Fase concluída! " + calculateStars();
+                actionBtn.innerText = "Próxima Fase";
+                if (currentPhaseIndex === 5) {
+                     textDisplay.innerHTML = "Prepare-se para o Desafio Final!";
+                } else {
+                     textDisplay.innerHTML = "🌟";
+                }
+            }
+            
+            actionBtn.style.display = "inline-block";
+        }
+    </script>
+</body>
+</html>
