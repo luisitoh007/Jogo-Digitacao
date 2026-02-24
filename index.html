@@ -14,7 +14,7 @@
             --success-color: #d4edda;
             --error-color: #f8d7da;
             --primary-btn: #4CAF50;
-            --secondary-btn: #FF9800; /* Cor para o botão de trocar texto */
+            --secondary-btn: #FF9800;
         }
 
         body {
@@ -58,23 +58,28 @@
             transition: width 0.4s ease;
         }
 
-        .stars {
-            font-size: 2rem;
-            margin-top: 10px;
-        }
+        .stars { font-size: 2rem; margin-top: 10px; }
 
         main {
             flex: 1;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start; /* Mudado para o texto longo caber melhor */
+            justify-content: flex-start;
             align-items: center;
             padding: 20px;
-            overflow-y: auto; /* Permite rolar a tela se necessário */
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* O truque do input oculto para resolver o bug do Mac/Acentos */
+        #hidden-input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
         }
 
         #text-display {
-            font-size: 3rem; /* Tamanho ligeiramente menor para textos longos */
+            font-size: 3rem;
             letter-spacing: 2px;
             background: white;
             padding: 20px 40px;
@@ -83,10 +88,11 @@
             margin-bottom: 20px;
             word-wrap: break-word;
             max-width: 90%;
-            max-height: 40vh; /* Altura máxima para não sumir na tela */
-            overflow-y: auto; /* Barra de rolagem interna se o texto for muito grande */
-            text-align: left; /* Textos longos ficam melhores alinhados à esquerda */
+            max-height: 40vh;
+            overflow-y: auto;
+            text-align: left;
             line-height: 1.5;
+            cursor: text; /* Indica que é clicável */
         }
 
         .char { color: #ccc; }
@@ -102,24 +108,11 @@
             border-radius: 10px;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
             margin: 10px;
         }
 
-        button:hover { transform: scale(1.05); }
-
-        #change-text-btn {
-            background-color: var(--secondary-btn);
-            display: none; /* Escondido por padrão */
-        }
-
-        #feedback-msg {
-            font-size: 1.5rem;
-            font-weight: bold;
-            height: 2rem;
-            color: #555;
-            margin-bottom: 10px;
-        }
+        #change-text-btn { background-color: var(--secondary-btn); display: none; }
+        #feedback-msg { font-size: 1.5rem; font-weight: bold; height: 2rem; color: #555; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -134,41 +127,72 @@
 
     <main>
         <p id="feedback-msg">Clique em "Começar" para iniciar!</p>
-        <div id="text-display"></div>
+        
+        <input type="text" id="hidden-input" autocomplete="off" spellcheck="false">
+        
+        <div id="text-display" onclick="document.getElementById('hidden-input').focus()"></div>
         
         <div>
             <button id="action-btn" onclick="startGame()">Começar</button>
-            <button id="change-text-btn" onclick="loadPhase6Text()">Trocar Texto</button>
+            <button id="change-text-btn" onclick="loadPhaseFinalText()">Trocar Texto</button>
         </div>
     </main>
 
     <script>
         /* =========================================
-           JAVASCRIPT: LÓGICA E GAMIFICAÇÃO
+           JAVASCRIPT: DADOS E LÓGICA
            ========================================= */
         
-        // 1. Definição das Fases (1 a 5)
-        const phases = [
-            { name: "O Básico (Vogais)", words: ["A", "E", "I", "O", "U"] },
-            { name: "O Básico (Consoantes)", words: ["B", "P", "M", "V", "D"] },
-            { name: "Palavras Curtas", words: ["PAI", "MALA", "RUA", "SOL"] },
-            { name: "Palavras do Dia a Dia", words: ["MERCADO", "CACHORRO", "BRASIL"] },
-            { name: "Frases Curtas", words: ["Bom dia.", "Tudo bem com voce?"] }
+        // Função para embaralhar os arrays (Tornar o jogo aleatório sempre)
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // 1. Bancos de Palavras Expandidos
+        // Adicionei várias palavras, o sistema vai embaralhar e pegar apenas uma quantidade X por fase.
+        const poolVowels = ["A", "E", "I", "O", "U"];
+        const poolConsonants = ["B", "C", "D", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "V", "X", "Z"];
+        const poolShortWords = ["PAI", "MAE", "VO", "TIA", "TIO", "BEM", "MAL", "SIM", "NAO", "SOL", "LUA", "DIA", "PAZ", "LUZ", "MAR", "COR"];
+        const poolMediumWords = ["MESA", "CASA", "BOLO", "CAFE", "GATO", "RATO", "DOCE", "AGUA", "FOGO", "TERRA", "VENTO", "LIVRO", "LETRA", "TEMPO", "NOITE"];
+        const poolLongWords = ["CACHORRO", "MERCADO", "TELEFONE", "COMPUTADOR", "INTERNET", "FAMILIA", "TRABALHO", "NATUREZA", "ESPERANCA", "FELICIDADE", "AMIZADE"];
+        const poolPhrases = [
+            "Bom dia, tudo bem?", "Meu nome é Maria.", "Eu gosto de cafe.", 
+            "O dia esta lindo hoje.", "Vamos aprender a digitar.", "A pratica leva a perfeicao.",
+            "O cachorro latiu alto.", "Fui ao mercado comprar pao.", "A internet nos conecta."
         ];
 
-        // Textos da Fase 6 (Textos Literários)
+        // Textos Literários (Fase Final)
         const literaryTexts = [
-            "Marcela amou-me durante quinze meses e onze contos de réis; nada menos. Meu pai, logo que teve aragem de meus amores, achou que era tempo de me enviar para a Europa.", // Machado de Assis
-            "O poeta é um fingidor. Finge tão completamente que chega a fingir que é dor a dor que deveras sente.", // Fernando Pessoa
-            "Renda-se, como eu me rendi. Mergulhe no que você não conhece como eu mergulhei. Não se preocupe em entender, viver ultrapassa qualquer entendimento.", // Clarice Lispector
-            "O correr da vida embrulha tudo. A vida é assim: esquenta e esfria, aperta e daí afrouxa, sossega e depois desinquieta. O que ela quer da gente é coragem.", // Guimarães Rosa
-            "O sertanejo é, antes de tudo, um forte. Não tem o raquitismo exaustivo dos mestiços neurastênicos do litoral.", // Euclides da Cunha
-            "Não sou alegre nem sou triste: sou poeta. Irmão das coisas fugidias, não sinto gozo nem tormento. Atravesso noites e dias no vento.", // Cecília Meireles
-            "No meio do caminho tinha uma pedra. Tinha uma pedra no meio do caminho. Nunca me esquecerei desse acontecimento na vida de minhas retinas tão fatigadas.", // Carlos Drummond de Andrade
-            "A natureza fez o homem feliz e bom, mas a sociedade deprava-o e torna-o miserável.", // Rousseau (Traduzido)
-            "Tudo vale a pena se a alma não é pequena. Quem quer passar além do Bojador tem que passar além da dor.", // Fernando Pessoa
-            "A arte de viver é simplesmente a arte de conviver... simplesmente, disse eu? Mas como é difícil!" // Mario Quintana
+            "Marcela amou-me durante quinze meses e onze contos de réis; nada menos.", 
+            "O poeta é um fingidor. Finge tão completamente que chega a fingir que é dor a dor que deveras sente.", 
+            "Renda-se, como eu me rendi. Mergulhe no que você não conhece como eu mergulhei.", 
+            "O correr da vida embrulha tudo. A vida é assim: esquenta e esfria, aperta e daí afrouxa.", 
+            "O sertanejo é, antes de tudo, um forte. Não tem o raquitismo exaustivo dos mestiços.", 
+            "Tudo vale a pena se a alma não é pequena. Quem quer passar além do Bojador tem que passar além da dor.",
+            "As pessoas não são más, elas só estão perdidas. O tempo é o melhor autor; sempre encontra um final perfeito."
         ];
+
+        // Criando as fases dinamicamente
+        let phases = [];
+
+        function buildPhases() {
+            // Pegamos quantidades aleatórias do banco para cada partida
+            phases = [
+                { name: "Fase 1: Vogais", words: shuffle([...poolVowels]) }, // Pega todas as vogais embaralhadas
+                { name: "Fase 2: Consoantes", words: shuffle([...poolConsonants]).slice(0, 8) }, // 8 consoantes aleatórias
+                { name: "Fase 3: Palavras Curtas", words: shuffle([...poolShortWords]).slice(0, 10) }, // 10 palavras curtas
+                { name: "Fase 4: Palavras Médias", words: shuffle([...poolMediumWords]).slice(0, 10) },
+                { name: "Fase 5: Palavras Longas", words: shuffle([...poolLongWords]).slice(0, 10) },
+                { name: "Fase 6: Frases", words: shuffle([...poolPhrases]).slice(0, 5) },
+                { name: "Fase Final: Texto Literário", words: [] } // O texto será gerido à parte
+            ];
+        }
 
         // 2. Variáveis de Estado
         let currentPhaseIndex = 0;
@@ -179,6 +203,7 @@
         let isPlaying = false;
 
         const textDisplay = document.getElementById("text-display");
+        const hiddenInput = document.getElementById("hidden-input");
         const feedbackMsg = document.getElementById("feedback-msg");
         const actionBtn = document.getElementById("action-btn");
         const changeTextBtn = document.getElementById("change-text-btn");
@@ -187,38 +212,39 @@
         const phaseNumber = document.getElementById("phase-number");
         const phaseName = document.getElementById("phase-name");
 
-        // 3. Funções do Jogo
+        // 3. Inicialização
         function startGame() {
+            buildPhases(); // Constrói as fases aleatórias
             isPlaying = true;
             errors = 0;
+            currentPhaseIndex = 0;
+            currentWordIndex = 0;
             actionBtn.style.display = "none";
             feedbackMsg.innerText = "Digite a letra sublinhada.";
+            hiddenInput.focus(); // Foca no input escondido
             loadWord();
             updateUI();
         }
 
         function loadWord() {
-            // Verifica se estamos na Fase 6 (índice 5)
-            if (currentPhaseIndex === 5) {
-                loadPhase6Text();
+            if (currentPhaseIndex === phases.length - 1) { // Última fase
+                loadPhaseFinalText();
             } else {
                 currentText = phases[currentPhaseIndex].words[currentWordIndex];
                 renderText();
             }
+            hiddenInput.value = ""; // Limpa o input escondido
         }
 
-        // Função específica para carregar um texto aleatório na Fase 6
-        function loadPhase6Text() {
+        function loadPhaseFinalText() {
             const randomIndex = Math.floor(Math.random() * literaryTexts.length);
             currentText = literaryTexts[randomIndex];
             renderText();
-            
-            // Exibe o botão de trocar texto
             changeTextBtn.style.display = "inline-block";
-            phaseName.innerText = "O Mestre da Digitação (Texto Livre)";
+            phaseName.innerText = "O Mestre da Digitação";
+            hiddenInput.focus();
         }
 
-        // Cria o HTML das letras na tela
         function renderText() {
             charIndex = 0;
             textDisplay.innerHTML = "";
@@ -234,19 +260,18 @@
         function updateUI() {
             phaseNumber.innerText = currentPhaseIndex + 1;
             
-            if (currentPhaseIndex < 5) {
+            if (currentPhaseIndex < phases.length - 1) {
                 phaseName.innerText = phases[currentPhaseIndex].name;
                 const totalWords = phases[currentPhaseIndex].words.length;
                 const progressPercent = (currentWordIndex / totalWords) * 100;
                 progress.style.width = progressPercent + "%";
             } else {
-                // Na fase 6, o progresso é baseado nos caracteres digitados do texto longo
                 progress.style.width = "0%";
             }
         }
 
-        function updatePhase6Progress() {
-            if (currentPhaseIndex === 5) {
+        function updateFinalProgress() {
+            if (currentPhaseIndex === phases.length - 1) {
                 const progressPercent = (charIndex / currentText.length) * 100;
                 progress.style.width = progressPercent + "%";
             }
@@ -257,30 +282,32 @@
             setTimeout(() => document.body.classList.remove(`flash-${type}`), 300);
         }
 
-        function calculateStars() {
-            if (errors === 0) return "⭐⭐⭐ Impecável!";
-            if (errors <= 5) return "⭐⭐ Muito bom!";
-            return "⭐ Você chegou lá!";
-        }
+        // 4. Capturando a Digitação Real (Lidando com Mac e Acentos)
+        // Usamos 'input' no campo escondido. Ele só dispara quando o caractere final é formado (ex: ~ + a = ã).
+        hiddenInput.addEventListener("input", (event) => {
+            if (!isPlaying) {
+                hiddenInput.value = "";
+                return;
+            }
 
-        // 4. Capturando a Digitação
-        document.addEventListener("keydown", (event) => {
-            if (!isPlaying) return;
-
-            // Ignoramos o processamento direto das teclas de modificação,
-            // pois o navegador juntará o "Shift" + "Letra" e nos dará o caractere final no próximo keydown.
-            if (event.key === "Shift" || event.key === "CapsLock" || event.key === "Dead" || event.key === "Alt" || event.key === "Control") return;
+            // Pega a última letra que entrou no input
+            const typedVal = hiddenInput.value;
+            const typedChar = typedVal.slice(-1); 
+            
+            if (!typedChar) return; // Se apagou algo, ignora
 
             const expectedChar = currentText[charIndex];
             const spans = textDisplay.querySelectorAll("span");
             
             let isCorrect = false;
 
-            // Lógica de validação: Fase 6 é rigorosa (Case Sensitive), Fases 1-5 são flexíveis
-            if (currentPhaseIndex === 5) {
-                isCorrect = (event.key === expectedChar); // Exige acentos e maiúsculas exatas
+            // Validação
+            if (currentPhaseIndex === phases.length - 1) {
+                isCorrect = (typedChar === expectedChar); // Última fase exige exatidão de maiúsculas e acentos
             } else {
-                isCorrect = (event.key.toLowerCase() === expectedChar.toLowerCase()); // Ignora maiúsculas/minúsculas
+                // Fases anteriores ignoram acentos complexos e maiúsculas para facilitar
+                // Compara removendo acentos da expectativa se necessário, ou só minúsculas
+                isCorrect = (typedChar.toLowerCase() === expectedChar.toLowerCase()); 
             }
 
             if (isCorrect) {
@@ -288,12 +315,11 @@
                 spans[charIndex].classList.add("correct");
                 flashScreen("green");
                 charIndex++;
-                updatePhase6Progress();
+                updateFinalProgress();
 
-                // Fim da palavra (Fases 1-5) ou Fim do Texto (Fase 6)
                 if (charIndex === currentText.length) {
-                    if (currentPhaseIndex === 5) {
-                        finishPhase(); // Terminou o texto longo
+                    if (currentPhaseIndex === phases.length - 1) {
+                        finishPhase();
                     } else {
                         currentWordIndex++;
                         if (currentWordIndex >= phases[currentPhaseIndex].words.length) {
@@ -304,26 +330,36 @@
                                 loadWord();
                                 updateUI();
                                 isPlaying = true;
-                            }, 500);
+                            }, 400);
                         }
                     }
                 } else {
                     spans[charIndex].classList.add("current");
-                    
-                    // Lógica para rolar a caixa de texto automaticamente se o texto for muito longo
-                    const currentSpan = spans[charIndex];
-                    currentSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+                    spans[charIndex].scrollIntoView({ behavior: "smooth", block: "center" });
                 }
             } else {
                 errors++;
                 flashScreen("red");
-                if (currentPhaseIndex === 5) {
+                if (currentPhaseIndex === phases.length - 1) {
                     feedbackMsg.innerText = "Atenção a maiúsculas, minúsculas e acentos!";
                 }
             }
+            
+            // Mantemos o input limpo para não pesar
+            hiddenInput.value = ""; 
         });
 
-        // 5. Finalizando a Fase
+        // Garantir que o input escondido mantenha o foco se o usuário clicar na tela
+        document.body.addEventListener("click", () => {
+            if(isPlaying) hiddenInput.focus();
+        });
+
+        function calculateStars() {
+            if (errors <= 2) return "⭐⭐⭐ Excelente!";
+            if (errors <= 6) return "⭐⭐ Muito bom!";
+            return "⭐ Continue praticando!";
+        }
+
         function finishPhase() {
             isPlaying = false;
             progress.style.width = "100%";
@@ -331,9 +367,10 @@
             
             currentPhaseIndex++;
             currentWordIndex = 0;
-            changeTextBtn.style.display = "none"; // Esconde o botão de trocar texto ao fim da fase
+            errors = 0;
+            changeTextBtn.style.display = "none";
 
-            if (currentPhaseIndex > 5) {
+            if (currentPhaseIndex >= phases.length) {
                 feedbackMsg.innerText = "Parabéns! Você se tornou um Mestre da Digitação!";
                 textDisplay.innerHTML = "🏆🎉🎓";
                 textDisplay.style.textAlign = "center";
@@ -342,11 +379,7 @@
             } else {
                 feedbackMsg.innerText = "Fase concluída! " + calculateStars();
                 actionBtn.innerText = "Próxima Fase";
-                if (currentPhaseIndex === 5) {
-                     textDisplay.innerHTML = "Prepare-se para o Desafio Final!";
-                } else {
-                     textDisplay.innerHTML = "🌟";
-                }
+                textDisplay.innerHTML = "🌟";
             }
             
             actionBtn.style.display = "inline-block";
