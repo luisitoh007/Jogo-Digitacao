@@ -213,6 +213,13 @@
       border-radius: 10px;
       box-shadow:none;
     }
+    #reset-btn{
+  background:#f59e0b; /* laranja alerta */
+  color:#fff;
+}
+#reset-btn:hover{
+  filter: brightness(0.95);
+}
     #save-exit-btn{ background: var(--secondary-btn); }
     #logout-btn{ background: var(--danger-btn); }
 
@@ -242,12 +249,13 @@
 <body>
 <header>
   <div class="session-panel">
-    <div class="session-actions">
-      <button class="mini-btn" id="save-exit-btn">💾 Salvar e Sair</button>
-      <button class="mini-btn" id="logout-btn">🚪 Logout</button>
-    </div>
-    <div class="who" id="whoami">Carregando...</div>
+  <div class="session-actions">
+    <button class="mini-btn" id="reset-btn" title="Resetar todo o progresso">🔄 Resetar</button>
+    <button class="mini-btn" id="save-exit-btn">💾 Salvar e Sair</button>
+    <button class="mini-btn" id="logout-btn">🚪 Logout</button>
   </div>
+  <div class="who" id="whoami">Carregando...</div>
+</div>
 
   <h2>
     <span id="difficulty-label">Dificuldade: Fácil</span> —
@@ -328,7 +336,33 @@ const saveExitBtn = document.getElementById("save-exit-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const loadingOverlay = document.getElementById("loading");
 const loadingMsg = document.getElementById("loading-msg");
+const resetBtn = document.getElementById("reset-btn");
 
+resetBtn.addEventListener("click", async () => {
+  if (!currentUser) return;
+
+  const ok = confirm(
+    "⚠️ ATENÇÃO!\n\n" +
+    "Isso irá APAGAR TODO o seu progresso:\n" +
+    "- fases concluídas\n" +
+    "- notas\n" +
+    "- estatísticas\n\n" +
+    "Essa ação NÃO pode ser desfeita.\n\n" +
+    "Deseja realmente resetar o jogo?"
+  );
+
+  if (!ok) return;
+
+  try {
+    showLoading("Resetando progresso...");
+    await resetProgressInFirestore();
+  } finally {
+    hideLoading();
+  }
+
+  // Recarrega a página com o jogo zerado
+  location.reload();
+});
 function showLoading(msg){
   loadingMsg.innerText = msg || "Carregando...";
   loadingOverlay.style.display = "flex";
