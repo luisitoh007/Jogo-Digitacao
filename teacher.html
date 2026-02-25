@@ -87,6 +87,10 @@
       background: #f9fafb;
     }
 
+    tr {
+  cursor: pointer;
+}
+    
     .ok {
       color: #15803d;
       font-weight: bold;
@@ -202,6 +206,10 @@ auth.onAuthStateChanged(async (user) => {
 /* =====================================================
    LOAD STUDENTS
    ===================================================== */
+  function openStudent(uid){
+  if (!uid) return;
+  window.location.href = `student.html?uid=${uid}`;
+}
 let studentsCache = [];
 
 async function loadStudents() {
@@ -235,17 +243,16 @@ async function loadStudents() {
     });
 
     rows.push(`
-      <tr>
-        <td>${u.nome}</td>
-        <td>${u.cpf}</td>
-        <td>${progress} / 24</td>
-        <td>${avg}%</td>
-        <td class="${approved ? "ok" : "bad"}">
-          ${approved ? "APROVADO" : "EM ANDAMENTO"}
-        </td>
-      </tr>
-    `);
-  }
+  <tr onclick="openStudent('${uid}')" style="cursor:pointer">
+    <td>${u.nome}</td>
+    <td>${u.cpf}</td>
+    <td>${progress} / 24</td>
+    <td>${avg}%</td>
+    <td class="${approved ? "ok" : "bad"}">
+      ${approved ? "APROVADO" : "EM ANDAMENTO"}
+    </td>
+  </tr>
+`);
 
   document.getElementById("students-body").innerHTML = rows.join("");
   document.getElementById("loading").style.display = "none";
