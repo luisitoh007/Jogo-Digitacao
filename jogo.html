@@ -732,9 +732,11 @@ function calculateStarsWithTime(errorsCount, elapsedSeconds){
 function computePhaseScore(errorsCount, elapsedSeconds){
   const chars = Math.max(phaseChars, 1);
 
+  // Calcula a precisão (acertos)
   const accuracy = clamp((chars - errorsCount) / chars, 0, 1);
   const accuracyScore = Math.round(accuracy * 100);
 
+  // Calcula a pontuação base do tempo
   let timeScore = 60;
   if (elapsedSeconds <= targetFast) timeScore = 100;
   else if (elapsedSeconds <= targetIdeal) timeScore = 92;
@@ -744,7 +746,22 @@ function computePhaseScore(errorsCount, elapsedSeconds){
     timeScore = Math.round(clamp(82 - (ratio - 1) * 22, 60, 82));
   }
 
-  return clamp(Math.round(accuracyScore * 0.65 + timeScore * 0.35), 0, 100);
+  // Nota bruta original (65% precisão, 35% tempo)
+  let rawScore = Math.round(accuracyScore * 0.65 + timeScore * 0.35);
+
+  // ==========================================
+  // NOVA REGRA: O tempo define o TETO MÁXIMO da nota
+  // ==========================================
+  const tier = currentTimeTier(elapsedSeconds);
+  let scoreCap = 100;
+  
+  if (tier === "fast") scoreCap = 100;
+  else if (tier === "ideal") scoreCap = 90;
+  else if (tier === "comfort") scoreCap = 80;
+  else scoreCap = 70; // tier === "slow" (como no caso do teste de 145 segundos)
+
+  // A nota final é a menor entre a nota bruta e o teto permitido pelo tempo
+  return clamp(Math.min(rawScore, scoreCap), 0, 100);
 }
 
 /* =========================
