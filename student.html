@@ -289,19 +289,19 @@ async function recalculateAndSave() {
       chars = Math.max(1, Math.round((Number(p.cps) || 1) * elapsed));
     }
 
-    // Calcula a Latência correta baseada no número da fase
+    // 3. RECUPERA A LATÊNCIA REAL (Opção A: 3.0s de respiro inicial!)
     const phaseNum = ((overallPhase - 1) % 8) + 1;
     let latency = 0.4;
     if (phaseNum === 8) latency = 0.3;
-    else if (phaseNum === 1) latency = 1.8; // Fases 1, 9 e 17 têm 1.8s
+    else if (phaseNum === 1) latency = 3.0; // AQUI: Respiro gigante para a Fase 1, 9 e 17
     else if (phaseNum === 2) latency = 1.2;
     else if (phaseNum === 3) latency = 0.6;
 
-   // 4. Força o cálculo perfeito das metas (Agora com parâmetros mais justos!)
-    let comfortCPS = diffLabel === "Fácil" ? 1.0 : (diffLabel === "Médio" ? 1.5 : 2.0);
-    let idealCPS   = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 1.8 : 2.4);
-    let fastCPS    = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.2 : 2.8);
-
+    // 4. Força o cálculo perfeito das metas (Opção A: CPS amigável para iniciantes)
+    let comfortCPS = diffLabel === "Fácil" ? 1.0 : (diffLabel === "Médio" ? 1.2 : 1.2);
+    let idealCPS   = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 1.6 : 1.6);
+    let fastCPS    = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.0 : 2.0);
+    
     let targetComfort = latency + (chars / comfortCPS);
     let targetIdeal = latency + (chars / idealCPS);
     let targetFast = latency + (chars / fastCPS);
