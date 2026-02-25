@@ -155,28 +155,56 @@ const firebaseConfig = {
   appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
 };
 
-firebase.initializeApp(firebaseConfig);
+<script>
+/* ============================
+   FIREBASE INIT
+   ============================ */
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  appId: "SEU_APP_ID"
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-/* =====================================================
-   AUTH GUARD
-   ===================================================== */
+/* ============================
+   AUTH GUARD CORRETO
+   ============================ */
+let authChecked = false;
+
 auth.onAuthStateChanged(async (user) => {
+  // garante que só roda uma vez
+  if (authChecked) return;
+  authChecked = true;
+
+  // agora sim: decisão FINAL
   if (!user) {
-    location.href = "index.html";
+    window.location.replace("index.html");
     return;
   }
 
-  const userDoc = await db.collection("users").doc(user.uid).get();
-  if (!userDoc.exists || userDoc.data().role !== "teacher") {
-    alert("Acesso restrito ao professor.");
-    location.href = "game.html";
-    return;
-  }
+  try {
+    const userDoc = await db.collection("users").doc(user.uid).get();
 
-  loadStudents();
+    if (!userDoc.exists || userDoc.data().role !== "teacher") {
+      window.location.replace("game.html");
+      return;
+    }
+
+    // ✅ usuário é professor
+    loadStudents();
+
+  } catch (err) {
+    console.error("Erro ao validar professor:", err);
+    alert("Erro ao validar permissão.");
+    window.location.replace("index.html");
+  }
 });
 
 /* =====================================================
