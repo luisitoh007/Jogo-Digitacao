@@ -265,7 +265,9 @@
   <div class="meta-row">
     <span class="pill">Tempo: <strong><span id="time-display">0.0</span>s</strong></span>
     <span class="pill">Erros: <strong><span id="errors-display">0</span></strong></span>
-    <span class="pill">Alvo: <strong><span id="target-display">0.0</span>s</strong></span>
+    <span class="pill">Alvo (Confortável): <strong><span id="target-display">0.0</span>s</strong></span>
+<span class="pill">Ideal: <strong><span id="ideal-display">0.0</span>s</strong></span>
+<span class="pill">Rápido: <strong><span id="fast-display">0.0</span>s</strong></span>
     <span class="pill">Nota da Fase: <strong><span id="phase-score-display">—</span>%</strong></span>
   </div>
 
@@ -446,6 +448,8 @@ const difficulties = [
   { key:"medium", label:"Médio",   picks:{ consonants:16, syllables:26, short:36, medium:32, long:24, phrases:14 }, secPerChar:0.18, timeGraceMultiplier:1.15, strictFromPhase2:false },
   { key:"hard",   label:"Difícil", picks:{ consonants:18, syllables:30, short:42, medium:38, long:28, phrases:16 }, secPerChar:0.14, timeGraceMultiplier:1.08, strictFromPhase2:true  }
 ];
+  const idealDisplay = document.getElementById("ideal-display");
+const fastDisplay  = document.getElementById("fast-display");
 
 /* ---------- DOM ---------- */
 const textDisplay = document.getElementById("text-display");
