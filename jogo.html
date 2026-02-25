@@ -175,26 +175,39 @@
 
     /* Painel fixo de sessão */
     .session-panel{
-      position:absolute;
-      right: 12px;
-      top: 12px;
-      display:flex;
-      gap:8px;
-      align-items:center;
-      background: var(--panel-bg);
-      backdrop-filter: blur(6px);
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid #eaeaea;
-    }
-    .session-panel .who{
-      font-size: .95rem;
-      color:#333;
-      max-width: 220px;
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+  position:absolute;
+  right:12px;
+  top:12px;
+  display:flex;
+  flex-direction:column; /* empilha */
+  gap:6px;
+  align-items:flex-end;
+  background: var(--panel-bg);
+  backdrop-filter: blur(6px);
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid #eaeaea;
+  max-width:260px;
+}
+
+.session-actions{
+  display:flex;
+  gap:6px;
+}
+
+.session-panel .who{
+  font-size:.9rem;
+  color:#333;
+  background:#f3f6ff;
+  border:1px solid #d9e3ff;
+  padding:4px 8px;
+  border-radius:8px;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  text-align:right;
+}
     .mini-btn{
       font-size: .95rem;
       padding: 8px 10px;
