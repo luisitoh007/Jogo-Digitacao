@@ -5,13 +5,13 @@
   <title>Detalhes do Aluno</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Firebase -->
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js</script>
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js</script>
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js</script>
+  <!-- Firebase (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <!-- Chart.js -->
-  https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 
   <style>
     body{
@@ -27,8 +27,11 @@
       display:flex;
       justify-content:space-between;
       align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-    header h2{ margin:0; font-size:1.3rem; }
+    header h2{ margin:0; font-size:1.2rem; }
+    header .sub { font-size:.9rem; color:#d1d5db; margin-top:4px; }
     header button{
       background:#2563eb;
       border:none;
@@ -36,6 +39,7 @@
       padding:8px 14px;
       border-radius:8px;
       cursor:pointer;
+      white-space: nowrap;
     }
     main{ padding:20px; }
     .card{
@@ -73,32 +77,64 @@
       margin-top:40px;
       color:#555;
     }
+    .errorbox{
+      background:#fff;
+      border-radius:12px;
+      padding:16px;
+      box-shadow:0 4px 10px rgba(0,0,0,.06);
+      max-width: 900px;
+      margin: 18px auto;
+      color:#b00020;
+      display:none;
+      text-align:left;
+      white-space: pre-wrap;
+    }
+    .meta{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top: 10px;
+    }
+    .pill{
+      background:#f3f6ff;
+      border:1px solid #d9e3ff;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:.95rem;
+      color:#333;
+    }
   </style>
 </head>
 
 <body>
 
 <header>
-  <h2 id="student-title">Aluno</h2>
-  <button onclick="history.back()">⬅ Voltar</button>
+  <div>
+    <h2 id="student-title">Aluno</h2>
+    <div class="sub" id="student-sub">Detalhes e gráficos</div>
+  </div>
+  <button id="backBtn">⬅ Voltar</button>
 </header>
 
 <main>
   <div id="loading" class="loading">Carregando dados do aluno…</div>
+  <div id="errorbox" class="errorbox"></div>
 
   <div id="content" style="display:none">
 
     <!-- RESUMO -->
     <div class="card">
-      <strong>CPF:</strong> <span id="cpf"></span><br>
-      <strong>Média geral:</strong> <span id="avg"></span>% —
-      <span id="status"></span>
+      <div class="meta">
+        <div class="pill"><strong>CPF:</strong> <span id="cpf"></span></div>
+        <div class="pill"><strong>Média:</strong> <span id="avg"></span>%</div>
+        <div class="pill"><strong>Status:</strong> <span id="status"></span></div>
+      </div>
     </div>
 
     <!-- GRÁFICOS -->
     <div class="grid">
       <div class="card">
-        <h4>Evolução da Nota</h4>
+        <h4>Evolução da Nota (Fases 1–24)</h4>
         <canvas id="scoreChart"></canvas>
       </div>
       <div class="card">
@@ -134,9 +170,14 @@
 </main>
 
 <script>
-/* =====================================================
-   FIREBASE CONFIG — COLE O SEU
-   ===================================================== */
+/* ============================
+   BOTÃO VOLTAR
+   ============================ */
+document.getElementById("backBtn").addEventListener("click", () => history.back());
+
+/* ============================
+   FIREBASE INIT
+   ============================ */
 const firebaseConfig = {
   apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
   authDomain: "jogo-digitacao.firebaseapp.com",
@@ -147,87 +188,151 @@ const firebaseConfig = {
 };
 
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-/* =====================================================
-   AUTH GUARD + LOAD
-   ===================================================== */
-const params = new URLSearchParams(window.location.search);
-const studentUid = params.get("uid");
+/* ============================
+   HELPERS UI
+   ============================ */
+const loadingEl = document.getElementById("loading");
+const contentEl = document.getElementById("content");
+const errorBoxEl = document.getElementById("errorbox");
 
-auth.onAuthStateChanged(async (user) => {
-  if (!user || !studentUid){
-    location.href = "index.html";
-    return;
-  }
-
-  const teacherDoc = await db.collection("users").doc(user.uid).get();
-  if (!teacherDoc.exists || teacherDoc.data().role !== "teacher"){
-    location.href = "index.html";
-    return;
-  }
-
-  loadStudent();
-});
-
-/* =====================================================
-   LOAD STUDENT DATA
-   ===================================================== */
-async function loadStudent(){
-  const userDoc = await db.collection("users").doc(studentUid).get();
-  const gradesDoc = await db.collection("grades").doc(studentUid).get();
-
-  if (!userDoc.exists || !gradesDoc.exists){
-    alert("Aluno sem dados.");
-    history.back();
-    return;
-  }
-
-  const user = userDoc.data();
-  const grades = gradesDoc.data();
-
-  document.getElementById("student-title").innerText = user.nome;
-  document.getElementById("cpf").innerText = user.cpf;
-  document.getElementById("avg").innerText = grades.average;
-  document.getElementById("status").innerHTML =
-    grades.approved
-      ? '<span class="ok">APROVADO</span>'
-      : '<span class="bad">EM ANDAMENTO</span>';
-
-  renderCharts(grades.phases || []);
-  renderTable(grades.phases || []);
-
-  document.getElementById("loading").style.display = "none";
-  document.getElementById("content").style.display = "block";
+function showError(msg){
+  loadingEl.style.display = "none";
+  contentEl.style.display = "none";
+  errorBoxEl.style.display = "block";
+  errorBoxEl.textContent = msg;
 }
 
-/* =====================================================
-   RENDER TABLE
-   ===================================================== */
+function showContent(){
+  loadingEl.style.display = "none";
+  errorBoxEl.style.display = "none";
+  contentEl.style.display = "block";
+}
+
+/* ============================
+   PARAMS
+   ============================ */
+const params = new URLSearchParams(window.location.search);
+const studentUid = params.get("uid");
+if (!studentUid){
+  showError("Erro: UID do aluno não foi informado.\nVolte ao painel e clique no aluno novamente.");
+}
+
+/* ============================
+   CHART INSTANCES (para não duplicar)
+   ============================ */
+let scoreChartInstance = null;
+let speedChartInstance = null;
+let accuracyChartInstance = null;
+
+/* ============================
+   AUTH + ROLE GUARD
+   ============================ */
+auth.onAuthStateChanged(async (user) => {
+  if (!studentUid) return;
+
+  if (!user){
+    location.href = "index.html";
+    return;
+  }
+
+  try{
+    const teacherDoc = await db.collection("users").doc(user.uid).get();
+    if (!teacherDoc.exists || teacherDoc.data().role !== "teacher"){
+      location.href = "index.html";
+      return;
+    }
+
+    await loadStudent();
+
+  } catch (err){
+    console.error(err);
+    showError("Erro ao validar acesso do professor.\n\nDetalhes:\n" + (err.message || err));
+  }
+});
+
+/* ============================
+   LOAD STUDENT DATA
+   ============================ */
+async function loadStudent(){
+  try{
+    const userDoc = await db.collection("users").doc(studentUid).get();
+    const gradesDoc = await db.collection("grades").doc(studentUid).get();
+
+    if (!userDoc.exists){
+      showError("Aluno não encontrado (users/{uid} não existe).");
+      return;
+    }
+    if (!gradesDoc.exists){
+      showError("Este aluno ainda não tem notas salvas (grades/{uid} não existe).\nPeça para ele jogar ao menos 1 fase.");
+      return;
+    }
+
+    const user = userDoc.data();
+    const grades = gradesDoc.data();
+    const phases = Array.isArray(grades.phases) ? grades.phases.filter(Boolean) : [];
+
+    document.getElementById("student-title").innerText = user.nome || "Aluno";
+    document.getElementById("student-sub").innerText = `UID: ${studentUid}`;
+    document.getElementById("cpf").innerText = user.cpf || "-";
+    document.getElementById("avg").innerText = grades.average ?? 0;
+
+    document.getElementById("status").innerHTML =
+      grades.approved
+        ? '<span class="ok">APROVADO</span>'
+        : '<span class="bad">EM ANDAMENTO</span>';
+
+    renderTable(phases);
+    renderCharts(phases);
+
+    showContent();
+
+  } catch (err){
+    console.error(err);
+    showError("Erro ao carregar dados do aluno.\n\nDetalhes:\n" + (err.message || err));
+  }
+}
+
+/* ============================
+   TABLE
+   ============================ */
 function renderTable(phases){
   const body = document.getElementById("phases-body");
+  if (!phases.length){
+    body.innerHTML = `<tr><td colspan="7">Sem fases registradas ainda.</td></tr>`;
+    return;
+  }
+
   body.innerHTML = phases.map(p => `
     <tr>
-      <td>${p.overallPhase}</td>
-      <td>${p.difficulty}</td>
-      <td>${p.score}</td>
-      <td>${p.elapsed}</td>
+      <td>${p.overallPhase ?? "-"}</td>
+      <td>${p.difficulty ?? "-"}</td>
+      <td>${p.score ?? "-"}</td>
+      <td>${p.elapsed ?? "-"}</td>
       <td>${p.cps ?? "-"}</td>
       <td>${p.accuracyPct ?? "-"}</td>
-      <td>${p.errors}</td>
+      <td>${p.errors ?? "-"}</td>
     </tr>
   `).join("");
 }
 
-/* =====================================================
-   GRÁFICOS
-   ===================================================== */
+/* ============================
+   CHARTS
+   ============================ */
 function renderCharts(phases){
-  const labels = phases.map(p => p.overallPhase);
-  const scores = phases.map(p => p.score);
+  // limpa charts anteriores se houver
+  if (scoreChartInstance) scoreChartInstance.destroy();
+  if (speedChartInstance) speedChartInstance.destroy();
+  if (accuracyChartInstance) accuracyChartInstance.destroy();
 
-  new Chart(document.getElementById("scoreChart"), {
+  const labels = phases.map(p => p.overallPhase);
+  const scores = phases.map(p => p.score ?? 0);
+
+  // 1) Evolução da Nota
+  scoreChartInstance = new Chart(document.getElementById("scoreChart"), {
     type:"line",
     data:{
       labels,
@@ -240,40 +345,69 @@ function renderCharts(phases){
         fill:true
       }]
     },
-    options:{ responsive:true, scales:{ y:{ beginAtZero:true, max:100 } } }
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:true } },
+      scales:{ y:{ beginAtZero:true, max:100 } }
+    }
   });
 
-  const byDiff = { "Fácil":[], "Médio":[], "Difícil":[] };
-  phases.forEach(p => { if (byDiff[p.difficulty]) byDiff[p.difficulty].push(p); });
+  // Agrupar por dificuldade
+  const buckets = { "Fácil":[], "Médio":[], "Difícil":[] };
+  phases.forEach(p => {
+    if (buckets[p.difficulty]) buckets[p.difficulty].push(p);
+  });
 
-  new Chart(document.getElementById("speedChart"), {
+  const diffLabels = Object.keys(buckets);
+
+  const avgCps = diffLabels.map(d => {
+    const arr = buckets[d];
+    if (!arr.length) return 0;
+    const sum = arr.reduce((a,b)=>a+(Number(b.cps)||0), 0);
+    return Number((sum/arr.length).toFixed(2));
+  });
+
+  const avgAcc = diffLabels.map(d => {
+    const arr = buckets[d];
+    if (!arr.length) return 0;
+    const sum = arr.reduce((a,b)=>a+(Number(b.accuracyPct)||0), 0);
+    return Math.round(sum/arr.length);
+  });
+
+  // 2) Velocidade
+  speedChartInstance = new Chart(document.getElementById("speedChart"), {
     type:"bar",
     data:{
-      labels:Object.keys(byDiff),
+      labels: diffLabels,
       datasets:[{
         label:"CPS",
-        data:Object.values(byDiff).map(arr =>
-          arr.length ? (arr.reduce((a,b)=>a+(b.cps||0),0)/arr.length).toFixed(2) : 0
-        ),
+        data: avgCps,
         backgroundColor:"#16a34a"
       }]
     },
-    options:{ responsive:true }
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:true } },
+      scales:{ y:{ beginAtZero:true } }
+    }
   });
 
-  new Chart(document.getElementById("accuracyChart"), {
+  // 3) Precisão
+  accuracyChartInstance = new Chart(document.getElementById("accuracyChart"), {
     type:"bar",
     data:{
-      labels:Object.keys(byDiff),
+      labels: diffLabels,
       datasets:[{
         label:"Precisão (%)",
-        data:Object.values(byDiff).map(arr =>
-          arr.length ? Math.round(arr.reduce((a,b)=>a+(b.accuracyPct||0),0)/arr.length) : 0
-        ),
+        data: avgAcc,
         backgroundColor:"#f59e0b"
       }]
     },
-    options:{ responsive:true, scales:{ y:{ max:100, beginAtZero:true } } }
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:true } },
+      scales:{ y:{ beginAtZero:true, max:100 } }
+    }
   });
 }
 </script>
