@@ -212,9 +212,9 @@ async function afterLogin(user) {
   const data = (await db.collection("users").doc(user.uid).get()).data();
 
   if (data.role === "teacher") {
-    window.location.href = "teacher.html";
+    window.location.href = "prof.html";
   } else {
-    window.location.href = "game.html";
+    window.location.href = "jogo.html";
   }
 }
 </script>
