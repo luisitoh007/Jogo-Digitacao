@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Detalhes do Aluno</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Firebase -->
+  https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js</script>
+  https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js</script>
+  https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js</script>
+
+  <!-- Chart.js -->
+  https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js</script>
+
+  <style>
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      background:#f4f6fa;
+      margin:0;
+      padding:0;
+    }
+    header{
+      background:#1f2937;
+      color:white;
+      padding:16px 20px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    header h2{ margin:0; font-size:1.3rem; }
+    header button{
+      background:#2563eb;
+      border:none;
+      color:white;
+      padding:8px 14px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    main{ padding:20px; }
+    .card{
+      background:white;
+      border-radius:12px;
+      padding:16px;
+      margin-bottom:18px;
+      box-shadow:0 4px 10px rgba(0,0,0,.06);
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+      gap:18px;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:.9rem;
+    }
+    th,td{
+      padding:8px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:center;
+    }
+    th{
+      background:#f1f5f9;
+      font-weight:bold;
+    }
+    .ok{ color:#15803d; font-weight:bold; }
+    .bad{ color:#b91c1c; font-weight:bold; }
+    canvas{ max-height:300px; }
+    .loading{
+      text-align:center;
+      font-size:1.1rem;
+      margin-top:40px;
+      color:#555;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h2 id="student-title">Aluno</h2>
+  <button onclick="history.back()">⬅ Voltar</button>
+</header>
+
+<main>
+  <div id="loading" class="loading">Carregando dados do aluno…</div>
+
+  <div id="content" style="display:none">
+
+    <!-- RESUMO -->
+    <div class="card">
+      <strong>CPF:</strong> <span id="cpf"></span><br>
+      <strong>Média geral:</strong> <span id="avg"></span>% —
+      <span id="status"></span>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div class="grid">
+      <div class="card">
+        <h4>Evolução da Nota</h4>
+        <canvas id="scoreChart"></canvas>
+      </div>
+      <div class="card">
+        <h4>Velocidade Média (CPS)</h4>
+        <canvas id="speedChart"></canvas>
+      </div>
+      <div class="card">
+        <h4>Precisão Média (%)</h4>
+        <canvas id="accuracyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- TABELA -->
+    <div class="card">
+      <h4>Detalhes por Fase</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Fase</th>
+            <th>Dificuldade</th>
+            <th>Nota</th>
+            <th>Tempo (s)</th>
+            <th>CPS</th>
+            <th>Precisão (%)</th>
+            <th>Erros</th>
+          </tr>
+        </thead>
+        <tbody id="phases-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<script>
+/* =====================================================
+   FIREBASE CONFIG — COLE O SEU
+   ===================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
+  authDomain: "jogo-digitacao.firebaseapp.com",
+  projectId: "jogo-digitacao",
+  storageBucket: "jogo-digitacao.firebasestorage.app",
+  messagingSenderId: "903019411681",
+  appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
+};
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* =====================================================
+   AUTH GUARD + LOAD
+   ===================================================== */
+const params = new URLSearchParams(window.location.search);
+const studentUid = params.get("uid");
+
+auth.onAuthStateChanged(async (user) => {
+  if (!user || !studentUid){
+    location.href = "index.html";
+    return;
+  }
+
+  const teacherDoc = await db.collection("users").doc(user.uid).get();
+  if (!teacherDoc.exists || teacherDoc.data().role !== "teacher"){
+    location.href = "index.html";
+    return;
+  }
+
+  loadStudent();
+});
+
+/* =====================================================
+   LOAD STUDENT DATA
+   ===================================================== */
+async function loadStudent(){
+  const userDoc = await db.collection("users").doc(studentUid).get();
+  const gradesDoc = await db.collection("grades").doc(studentUid).get();
+
+  if (!userDoc.exists || !gradesDoc.exists){
+    alert("Aluno sem dados.");
+    history.back();
+    return;
+  }
+
+  const user = userDoc.data();
+  const grades = gradesDoc.data();
+
+  document.getElementById("student-title").innerText = user.nome;
+  document.getElementById("cpf").innerText = user.cpf;
+  document.getElementById("avg").innerText = grades.average;
+  document.getElementById("status").innerHTML =
+    grades.approved
+      ? '<span class="ok">APROVADO</span>'
+      : '<span class="bad">EM ANDAMENTO</span>';
+
+  renderCharts(grades.phases || []);
+  renderTable(grades.phases || []);
+
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("content").style.display = "block";
+}
+
+/* =====================================================
+   RENDER TABLE
+   ===================================================== */
+function renderTable(phases){
+  const body = document.getElementById("phases-body");
+  body.innerHTML = phases.map(p => `
+    <tr>
+      <td>${p.overallPhase}</td>
+      <td>${p.difficulty}</td>
+      <td>${p.score}</td>
+      <td>${p.elapsed}</td>
+      <td>${p.cps ?? "-"}</td>
+      <td>${p.accuracyPct ?? "-"}</td>
+      <td>${p.errors}</td>
+    </tr>
+  `).join("");
+}
+
+/* =====================================================
+   GRÁFICOS
+   ===================================================== */
+function renderCharts(phases){
+  const labels = phases.map(p => p.overallPhase);
+  const scores = phases.map(p => p.score);
+
+  new Chart(document.getElementById("scoreChart"), {
+    type:"line",
+    data:{
+      labels,
+      datasets:[{
+        label:"Nota",
+        data:scores,
+        borderColor:"#2563eb",
+        backgroundColor:"rgba(37,99,235,.15)",
+        tension:.3,
+        fill:true
+      }]
+    },
+    options:{ responsive:true, scales:{ y:{ beginAtZero:true, max:100 } } }
+  });
+
+  const byDiff = { "Fácil":[], "Médio":[], "Difícil":[] };
+  phases.forEach(p => { if (byDiff[p.difficulty]) byDiff[p.difficulty].push(p); });
+
+  new Chart(document.getElementById("speedChart"), {
+    type:"bar",
+    data:{
+      labels:Object.keys(byDiff),
+      datasets:[{
+        label:"CPS",
+        data:Object.values(byDiff).map(arr =>
+          arr.length ? (arr.reduce((a,b)=>a+(b.cps||0),0)/arr.length).toFixed(2) : 0
+        ),
+        backgroundColor:"#16a34a"
+      }]
+    },
+    options:{ responsive:true }
+  });
+
+  new Chart(document.getElementById("accuracyChart"), {
+    type:"bar",
+    data:{
+      labels:Object.keys(byDiff),
+      datasets:[{
+        label:"Precisão (%)",
+        data:Object.values(byDiff).map(arr =>
+          arr.length ? Math.round(arr.reduce((a,b)=>a+(b.accuracyPct||0),0)/arr.length) : 0
+        ),
+        backgroundColor:"#f59e0b"
+      }]
+    },
+    options:{ responsive:true, scales:{ y:{ max:100, beginAtZero:true } } }
+  });
+}
+</script>
+
+</body>
+</html>
