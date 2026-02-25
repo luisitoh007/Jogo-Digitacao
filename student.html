@@ -281,27 +281,40 @@ async function recalculateAndSave() {
     if (!p) continue;
 
     // Resgata os dados antigos da jogada
-    const chars = p.chars || 1;
+    const overallPhase = p.overallPhase || (i + 1);
+    const diffLabel = p.difficulty || "Fácil";
     const errors = p.errors || 0;
     const elapsed = p.elapsed || 999;
-    const diffLabel = p.difficulty || "Fácil";
     const notaAntiga = p.score || 0;
 
-    // 2. Reconstrói os alvos de tempo (Targets) baseados na dificuldade
+    // 2. Garante a contagem de caracteres (Se estiver faltando no banco, deduzimos pela velocidade)
+    let chars = p.chars;
+    if (!chars || chars <= 0) {
+      chars = Math.max(1, Math.round((p.cps || 1) * elapsed));
+    }
+
+    // 3. RECUPERA A LATÊNCIA REAL (O erro da Fase 17 estava aqui!)
+    const phaseNum = ((overallPhase - 1) % 8) + 1; // Mapeia a fase de 1 a 8
+    let latency = 0.4;
+    if (phaseNum === 8) latency = 0.3;
+    else if (phaseNum === 1) latency = 1.8; // Fases 1, 9 e 17 ganham 1.8s de bônus!
+    else if (phaseNum === 2) latency = 1.2;
+    else if (phaseNum === 3) latency = 0.6;
+
+    // 4. Força o cálculo perfeito das metas (Ignora valores bugados do banco antigo)
     let comfortCPS = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 2.0 : 2.6);
     let idealCPS = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.3 : 2.8);
     let fastCPS = diffLabel === "Fácil" ? 2.0 : (diffLabel === "Médio" ? 2.6 : 3.0);
 
-    // Aplica a latência base do jogo
-    let targetComfort = p.targetComfort || (0.4 + (chars / comfortCPS));
-    let targetIdeal = p.targetIdeal || (0.4 + (chars / idealCPS));
-    let targetFast = p.targetFast || (0.4 + (chars / fastCPS));
+    let targetComfort = latency + (chars / comfortCPS);
+    let targetIdeal = latency + (chars / idealCPS);
+    let targetFast = latency + (chars / fastCPS);
 
-    // 3. Recalcula a precisão exata
+    // 5. Recalcula a precisão exata
     const accuracy = Math.max(0, Math.min(1, (chars - errors) / chars));
     const accuracyScore = Math.round(accuracy * 100);
 
-    // 4. Calcula a nota de tempo original
+    // 6. Calcula a nota de tempo original
     let timeScore = 60;
     if (elapsed <= targetFast) timeScore = 100;
     else if (elapsed <= targetIdeal) timeScore = 92;
@@ -313,36 +326,35 @@ async function recalculateAndSave() {
 
     let rawScore = Math.round(accuracyScore * 0.65 + timeScore * 0.35);
 
-    // 5. APLICA A NOVA REGRA DO TETO (CAP)
+    // 7. APLICA A NOVA REGRA DO TETO (CAP)
     let tier = "slow";
     let cap = 70;
     if (elapsed <= targetFast) { tier = "fast"; cap = 100; }
     else if (elapsed <= targetIdeal) { tier = "ideal"; cap = 90; }
     else if (elapsed <= targetComfort) { tier = "comfort"; cap = 80; }
 
-    // A nota final é a menor entre a calculada e o teto permitido
     let finalScore = Math.min(rawScore, cap);
 
-    // Verifica se a nota mudou para contabilizar
     if (finalScore !== notaAntiga) ajustadas++;
 
-    // Atualiza o objeto no cache com os dados perfeitos
+    // Atualiza o objeto com os dados matematicamente perfeitos
+    p.chars = chars;
     p.score = finalScore;
     p.timeTier = tier;
     p.targetComfort = Math.round(targetComfort * 10) / 10;
     p.targetIdeal = Math.round(targetIdeal * 10) / 10;
     p.targetFast = Math.round(targetFast * 10) / 10;
-    p.scoreAdjusted = true; // Flag para mostrar no CSV que sofreu recálculo
+    p.scoreAdjusted = true;
 
     somaNotas += finalScore;
     fasesValidas++;
   }
 
-  // 6. Recalcula a média geral verdadeira
+  // 8. Recalcula a média geral verdadeira
   const novaMedia = fasesValidas > 0 ? Math.round(somaNotas / fasesValidas) : 0;
   const aprovado = novaMedia >= 70;
 
-  // 7. Salva no Firebase
+  // 9. Salva no Firebase
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const studentUid = urlParams.get('uid');
@@ -355,7 +367,7 @@ async function recalculateAndSave() {
     }, { merge: true });
 
     alert(`✅ Sucesso!\nForam corrigidas as notas de ${ajustadas} fases.\nA nova média real é: ${novaMedia}%`);
-    location.reload(); // Recarrega a página para atualizar os gráficos limpos
+    location.reload(); 
     
   } catch(e) {
     console.error("Erro ao salvar recálculo:", e);
