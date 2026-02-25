@@ -189,7 +189,7 @@ auth.onAuthStateChanged(async (user) => {
     const userDoc = await db.collection("users").doc(user.uid).get();
 
     if (!userDoc.exists || userDoc.data().role !== "teacher") {
-      window.location.replace("game.html");
+      window.location.replace("jogo.html");
       return;
     }
 
