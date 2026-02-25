@@ -6,9 +6,9 @@
   <title>Jogo de Digitação (Firebase)</title>
 
   <!-- Firebase SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <style>
     :root{
@@ -290,18 +290,26 @@
    FIREBASE INIT (COLE SUA CONFIG AQUI)
    ========================================================= */
 const firebaseConfig = {
-  // COLE AQUI o firebaseConfig do seu projeto (apiKey, authDomain, projectId, appId etc)
-  // Exemplo:
-  // apiKey: "...",
-  // authDomain: "...",
-  // projectId: "...",
-  // appId: "..."
+  apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
+  authDomain: "jogo-digitacao.firebaseapp.com",
+  projectId: "jogo-digitacao",
+  storageBucket: "jogo-digitacao.firebasestorage.app",
+  messagingSenderId: "903019411681",
+  appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
 };
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+
+try {
+  firebase.initializeApp(firebaseConfig);
+} catch (e) {
+  document.body.innerHTML = "<pre style='padding:16px;white-space:pre-wrap'>ERRO ao iniciar Firebase:\n" +
+    (e && e.message ? e.message : e) + "\n\nVerifique:\n- scripts <script src=...>\n- firebaseConfig preenchido\n</pre>";
+  throw e;
+}
 
 /* =========================================================
    UI refs (sessão)
