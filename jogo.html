@@ -341,24 +341,59 @@ const resetBtn = document.getElementById("reset-btn");
 resetBtn.addEventListener("click", async () => {
   if (!currentUser) return;
 
-  const ok = confirm(
-    "⚠️ ATENÇÃO!\n\n" +
-    "Isso irá APAGAR TODO o seu progresso:\n" +
-    "- fases concluídas\n" +
-    "- notas\n" +
-    "- estatísticas\n\n" +
-    "Essa ação NÃO pode ser desfeita.\n\n" +
-    "Deseja realmente resetar o jogo?"
+  // ⏸️ pausa imediata
+  pauseTimer();
+
+  const choice = prompt(
+    "⚠️ RESET\n\n" +
+    "Digite uma opção:\n\n" +
+    "1 → Resetar APENAS a fase atual\n" +
+    "2 → Resetar TODO o jogo\n\n" +
+    "Qual opção você deseja? (1 ou 2)\n" +
+    "Cancelar = não resetar nada"
   );
 
-  if (!ok) return;
-
-  try {
-    showLoading("Resetando progresso...");
-    await resetProgressInFirestore();
-  } finally {
-    hideLoading();
+  if (choice === null){
+    // cancelar → retoma tempo
+    resumeTimer();
+    return;
   }
+
+  if (choice === "1"){
+    await resetCurrentPhase();
+    return;
+  }
+
+  if (choice === "2"){
+    const confirmAll = confirm(
+      "⚠️ ATENÇÃO!\n\n" +
+      "Isso irá APAGAR TODO o progresso:\n" +
+      "- fases\n" +
+      "- notas\n" +
+      "- estatísticas\n\n" +
+      "Essa ação NÃO pode ser desfeita.\n\n" +
+      "Deseja continuar?"
+    );
+
+    if (!confirmAll){
+      resumeTimer();
+      return;
+    }
+
+    try{
+      showLoading("Resetando jogo...");
+      await resetProgressInFirestore();
+    } finally {
+      hideLoading();
+    }
+
+    location.reload();
+    return;
+  }
+
+  // qualquer outra coisa
+  resumeTimer();
+});
 
   // Recarrega a página com o jogo zerado
   location.reload();
@@ -737,7 +772,50 @@ function stopTimer(){
   phaseElapsed = phaseStartMs ? (performance.now() - phaseStartMs)/1000 : 0;
   timeDisplay.innerText = fmt1(phaseElapsed);
 }
+function pauseTimer(){
+  if (timerInterval){
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
 
+function resumeTimer(){
+  if (!isPlaying) return;
+  phaseStartMs = performance.now() - (phaseElapsed * 1000);
+  timerInterval = setInterval(() => {
+    if (!isPlaying) return;
+    phaseElapsed = (performance.now() - phaseStartMs)/1000;
+    timeDisplay.innerText = fmt1(phaseElapsed);
+  }, 100);
+}
+
+async function resetCurrentPhase(){
+  pauseTimer();
+
+  errors = 0;
+  charIndex = 0;
+  phaseElapsed = 0;
+  currentWordIndex = 0;
+
+  errorsDisplay.innerText = "0";
+  timeDisplay.innerText = "0.0";
+  starsDisplay.innerText = "⭐⭐⭐";
+  phaseScoreDisplay.innerText = "—";
+
+  currentText = "";
+
+  isPlaying = false;
+  feedbackMsg.innerText = "Fase reiniciada. Clique em “Começar” para tentar novamente.";
+  textDisplay.innerHTML = "🔁 Fase reiniciada";
+  textDisplay.style.textAlign = "center";
+
+  setButton("start", "Começar");
+  markDirty();
+
+  await saveProgress("resetPhase");
+}
+
+  
 /* =========================================================
    Estrelas e NOTA (precisão + tempo)
    ========================================================= */
