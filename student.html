@@ -27,15 +27,16 @@
       display:flex;
       justify-content:space-between;
       align-items:center;
-      gap: 10px;
-      flex-wrap: wrap;
+      gap:10px;
+      flex-wrap:wrap;
     }
     header h2{ margin:0; font-size:1.2rem; }
-    header .sub { font-size:.9rem; color:#d1d5db; margin-top:4px; }
+    header .sub{ font-size:.9rem; color:#d1d5db; margin-top:4px; }
     header .actions{
       display:flex;
       gap:8px;
-      flex-wrap: wrap;
+      flex-wrap:wrap;
+      align-items:center;
     }
     header button{
       background:#2563eb;
@@ -44,10 +45,12 @@
       padding:8px 14px;
       border-radius:8px;
       cursor:pointer;
-      white-space: nowrap;
+      white-space:nowrap;
     }
     header button.secondary{ background:#0ea5e9; }
+
     main{ padding:20px; }
+
     .card{
       background:white;
       border-radius:12px;
@@ -69,7 +72,7 @@
       padding:8px;
       border-bottom:1px solid #e5e7eb;
       text-align:center;
-      vertical-align: top;
+      vertical-align:top;
     }
     th{
       background:#f1f5f9;
@@ -77,7 +80,9 @@
     }
     .ok{ color:#15803d; font-weight:bold; }
     .bad{ color:#b91c1c; font-weight:bold; }
+
     canvas{ max-height:300px; }
+
     .loading{
       text-align:center;
       font-size:1.1rem;
@@ -100,7 +105,7 @@
       display:flex;
       gap:10px;
       flex-wrap:wrap;
-      margin-top: 10px;
+      margin-top:10px;
     }
     .pill{
       background:#f3f6ff;
@@ -114,6 +119,12 @@
       color:#666;
       font-size:.9rem;
       margin-top:8px;
+    }
+    .notice{
+      margin-top:10px;
+      color:#0b5;
+      font-size:.9rem;
+      display:none;
     }
   </style>
 </head>
@@ -138,19 +149,20 @@
 
   <div id="content" style="display:none">
 
-    <!-- RESUMO -->
     <div class="card">
       <div class="meta">
         <div class="pill"><strong>CPF:</strong> <span id="cpf"></span></div>
         <div class="pill"><strong>Média:</strong> <span id="avg"></span>%</div>
         <div class="pill"><strong>Status:</strong> <span id="status"></span></div>
       </div>
+
       <div class="hint">
-        Dica: o CSV completo exporta 1 linha por fase (nota, tempo, CPS, precisão, erros e targets).
+        Dica: o CSV completo exporta 1 linha por fase (nota, tempo, CPS, precisão, erros, targets e timeTier).
       </div>
+
+      <div id="notice" class="notice"></div>
     </div>
 
-    <!-- GRÁFICOS -->
     <div class="grid">
       <div class="card">
         <h4>Evolução da Nota (Fases 1–24)</h4>
@@ -166,7 +178,6 @@
       </div>
     </div>
 
-    <!-- TABELA -->
     <div class="card">
       <h4>Detalhes por Fase</h4>
       <table>
@@ -193,17 +204,7 @@
    BOTÕES
    ============================ */
 document.getElementById("backBtn").addEventListener("click", () => history.back());
-  function capScoreByTimeTier(score, timeTier){
-  const caps = {
-    fast: 100,
-    ideal: 95,
-    comfort: 90,
-    slow: 80
-  };
-  const cap = caps[timeTier] ?? 100;
-  return Math.min(score, cap);
-}
-  
+
 /* ============================
    FIREBASE INIT
    ============================ */
@@ -227,6 +228,7 @@ const db = firebase.firestore();
 const loadingEl = document.getElementById("loading");
 const contentEl = document.getElementById("content");
 const errorBoxEl = document.getElementById("errorbox");
+const noticeEl = document.getElementById("notice");
 
 function showError(msg){
   loadingEl.style.display = "none";
@@ -234,10 +236,18 @@ function showError(msg){
   errorBoxEl.style.display = "block";
   errorBoxEl.textContent = msg;
 }
+
 function showContent(){
   loadingEl.style.display = "none";
   errorBoxEl.style.display = "none";
   contentEl.style.display = "block";
+}
+
+function setStatusUI(approved){
+  document.getElementById("status").innerHTML =
+    approved
+      ? '<span class="ok">APROVADO</span>'
+      : '<span class="bad">EM ANDAMENTO</span>';
 }
 
 /* ============================
@@ -267,6 +277,30 @@ let exportContext = {
   approved: false,
   phases: []
 };
+
+/* ============================
+   REGRAS: teto por tempo
+   ============================ */
+function capScoreByTimeTier(score, timeTier){
+  const caps = { fast:100, ideal:95, comfort:90, slow:80 };
+  const cap = caps[timeTier] ?? 100;
+  return Math.min(Number(score) || 0, cap);
+}
+
+// Se timeTier não existir, deriva pelo elapsed vs targets (quando disponíveis)
+function deriveTimeTierFromTargets(p){
+  const elapsed = Number(p.elapsed);
+  if (!isFinite(elapsed)) return null;
+
+  const tf = Number(p.targetFast);
+  const ti = Number(p.targetIdeal);
+  const tc = Number(p.targetComfort);
+
+  if (isFinite(tf) && elapsed <= tf) return "fast";
+  if (isFinite(ti) && elapsed <= ti) return "ideal";
+  if (isFinite(tc) && elapsed <= tc) return "comfort";
+  return "slow";
+}
 
 /* ============================
    CSV helpers
@@ -302,13 +336,12 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     "uid_aluno","nome","cpf","media_geral","status_geral",
     "fase_geral","dificuldade","fase_nome",
     "nota","tempo_s","cps","precisao_pct","erros",
-    "target_confortavel_s","target_ideal_s","target_rapido_s","time_tier"
+    "target_confortavel_s","target_ideal_s","target_rapido_s","time_tier","scoreAdjusted"
   ];
 
   const lines = [];
   lines.push(header.join(","));
 
-  // Se não houver fases, exporta só a “capa”
   if (!phases || phases.length === 0){
     lines.push([
       csvEscape(studentUid),
@@ -318,7 +351,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
       csvEscape(status),
       "", "", "",
       "", "", "", "", "",
-      "", "", "", ""
+      "", "", "", "", ""
     ].join(","));
     downloadText(`relatorio_${cpf || studentUid}.csv`, lines.join("\n"));
     return;
@@ -345,7 +378,8 @@ document.getElementById("exportBtn").addEventListener("click", () => {
       csvEscape(p.targetComfort ?? ""),
       csvEscape(p.targetIdeal ?? ""),
       csvEscape(p.targetFast ?? ""),
-      csvEscape(p.timeTier ?? "")
+      csvEscape(p.timeTier ?? ""),
+      csvEscape(p.scoreAdjusted ? "true" : "")
     ].join(","));
   }
 
@@ -403,50 +437,71 @@ async function loadStudent(){
     document.getElementById("student-sub").innerText = `UID: ${studentUid}`;
     document.getElementById("cpf").innerText = user.cpf || "-";
     document.getElementById("avg").innerText = grades.average ?? 0;
+    setStatusUI(!!grades.approved);
 
-    document.getElementById("status").innerHTML =
-      grades.approved
-        ? '<span class="ok">APROVADO</span>'
-        : '<span class="bad">EM ANDAMENTO</span>';
-  let changed = false;
+    // ===== RECÁLCULO (teto por tempo) =====
+    let changed = false;
+    let adjustedCount = 0;
 
-for (const p of phases){
-  if (!p) continue;
-  if (!p.timeTier) continue;
+    for (const p of phases){
+      if (!p) continue;
 
-  const oldScore = p.score ?? 0;
-  const newScore = capScoreByTimeTier(oldScore, p.timeTier);
+      const tier = p.timeTier || deriveTimeTierFromTargets(p);
+      if (!tier) continue;
 
-  if (newScore !== oldScore){
-    p.score = newScore;
-    p.scoreAdjusted = true; // opcional, só para auditoria
-    changed = true;
-  }
-}
+      const oldScore = Number(p.score ?? 0);
+      const newScore = capScoreByTimeTier(oldScore, tier);
+
+      // grava tier derivado (se faltava) e aplica teto
+      if (p.timeTier !== tier) {
+        p.timeTier = tier;
+        changed = true;
+      }
+
+      if (newScore !== oldScore){
+        p.score = newScore;
+        p.scoreAdjusted = true;
+        changed = true;
+        adjustedCount++;
+      }
+    }
+
     if (changed){
-  const total = phases.reduce((acc,p)=>acc+(p?.score ?? 0), 0);
-  const count = phases.filter(Boolean).length;
-  const avg = count ? Math.round(total / count) : 0;
-  const approved = avg >= 70;
+      const total = phases.reduce((acc,p)=>acc+(Number(p?.score) || 0), 0);
+      const count = phases.filter(Boolean).length;
+      const avg = count ? Math.round(total / count) : 0;
+      const approved = avg >= 70;
 
-  grades.average = avg;
-  grades.approved = approved;
+      // atualiza UI imediatamente
+      document.getElementById("avg").innerText = avg;
+      setStatusUI(approved);
 
-  await db.collection("grades").doc(studentUid).set({
-    phases,
-    average: avg,
-    approved,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-}
+      // salva no Firestore
+      await db.collection("grades").doc(studentUid).set({
+        phases,
+        average: avg,
+        approved,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
 
-    // prepara cache para export
+      // aviso (para você conferir que rodou)
+      noticeEl.style.display = "block";
+      noticeEl.textContent = `✅ Notas reavaliadas com teto por tempo: ${adjustedCount} fase(s) ajustada(s).`;
+    } else {
+      noticeEl.style.display = "none";
+      noticeEl.textContent = "";
+    }
+
+    // prepara cache para export (sempre com os valores finais)
+    const finalAvg = Number(document.getElementById("avg").innerText) || (grades.average ?? 0);
+    const finalApproved = document.getElementById("status").innerText.includes("APROVADO");
+
     exportContext = {
       studentUid,
       nome: user.nome || "",
       cpf: user.cpf || "",
-      average: grades.average ?? 0,
-      approved: !!grades.approved,
+      average: finalAvg,
+      approved: finalApproved,
       phases
     };
 
@@ -493,9 +548,8 @@ function renderCharts(phases){
   if (accuracyChartInstance) accuracyChartInstance.destroy();
 
   const labels = phases.map(p => p.overallPhase);
-  const scores = phases.map(p => p.score ?? 0);
+  const scores = phases.map(p => Number(p.score ?? 0));
 
-  // 1) Evolução da Nota
   scoreChartInstance = new Chart(document.getElementById("scoreChart"), {
     type:"line",
     data:{
@@ -516,7 +570,6 @@ function renderCharts(phases){
     }
   });
 
-  // Agrupar por dificuldade
   const buckets = { "Fácil":[], "Médio":[], "Difícil":[] };
   phases.forEach(p => { if (buckets[p.difficulty]) buckets[p.difficulty].push(p); });
 
@@ -536,7 +589,6 @@ function renderCharts(phases){
     return Math.round(sum/arr.length);
   });
 
-  // 2) Velocidade
   speedChartInstance = new Chart(document.getElementById("speedChart"), {
     type:"bar",
     data:{
@@ -554,7 +606,6 @@ function renderCharts(phases){
     }
   });
 
-  // 3) Precisão
   accuracyChartInstance = new Chart(document.getElementById("accuracyChart"), {
     type:"bar",
     data:{
