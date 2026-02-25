@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Painel do Professor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 0;
+      background: #f4f6fa;
+    }
+
+    header {
+      background: #1f2937;
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h2 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+
+    header button {
+      background: #ef4444;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      font-size: .95rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    main {
+      padding: 20px;
+    }
+
+    .actions {
+      margin-bottom: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .actions button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .95rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 10px rgba(0,0,0,.05);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      font-size: .95rem;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: bold;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .ok {
+      color: #15803d;
+      font-weight: bold;
+    }
+
+    .bad {
+      color: #b91c1c;
+      font-weight: bold;
+    }
+
+    .small {
+      color: #555;
+      font-size: .85rem;
+    }
+
+    .loading {
+      text-align: center;
+      font-size: 1.1rem;
+      color: #555;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h2>Painel do Professor</h2>
+  <button onclick="logout()">Logout</button>
+</header>
+
+<main>
+
+  <div class="actions">
+    <button onclick="exportCSV()">Exportar CSV</button>
+    <button onclick="location.reload()">Atualizar</button>
+  </div>
+
+  <div id="loading" class="loading">Carregando alunos…</div>
+
+  <table id="students-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Aluno</th>
+        <th>CPF</th>
+        <th>Progresso</th>
+        <th>Média</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="students-body"></tbody>
+  </table>
+
+</main>
+
+<script>
+/* =====================================================
+   FIREBASE CONFIG — COLE O SEU
+   ===================================================== */
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  appId: "SEU_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* =====================================================
+   AUTH GUARD
+   ===================================================== */
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    location.href = "index.html";
+    return;
+  }
+
+  const userDoc = await db.collection("users").doc(user.uid).get();
+  if (!userDoc.exists || userDoc.data().role !== "teacher") {
+    alert("Acesso restrito ao professor.");
+    location.href = "game.html";
+    return;
+  }
+
+  loadStudents();
+});
+
+/* =====================================================
+   LOAD STUDENTS
+   ===================================================== */
+let studentsCache = [];
+
+async function loadStudents() {
+  const usersSnap = await db.collection("users").get();
+
+  const rows = [];
+  studentsCache = [];
+
+  for (const doc of usersSnap.docs) {
+    const u = doc.data();
+    if (u.role !== "student") continue;
+
+    const uid = doc.id;
+
+    const progressDoc = await db.collection("progress").doc(uid).get();
+    const gradesDoc = await db.collection("grades").doc(uid).get();
+
+    const progress = progressDoc.exists
+      ? (progressDoc.data().difficultyIndex * 8 + progressDoc.data().currentPhaseIndex + 1)
+      : 0;
+
+    const avg = gradesDoc.exists ? gradesDoc.data().average : 0;
+    const approved = gradesDoc.exists ? gradesDoc.data().approved : false;
+
+    studentsCache.push({
+      nome: u.nome,
+      cpf: u.cpf,
+      progresso: progress,
+      media: avg,
+      status: approved ? "APROVADO" : "EM ANDAMENTO"
+    });
+
+    rows.push(`
+      <tr>
+        <td>${u.nome}</td>
+        <td>${u.cpf}</td>
+        <td>${progress} / 24</td>
+        <td>${avg}%</td>
+        <td class="${approved ? "ok" : "bad"}">
+          ${approved ? "APROVADO" : "EM ANDAMENTO"}
+        </td>
+      </tr>
+    `);
+  }
+
+  document.getElementById("students-body").innerHTML = rows.join("");
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("students-table").style.display = "table";
+}
+
+/* =====================================================
+   EXPORT CSV
+   ===================================================== */
+function exportCSV() {
+  if (!studentsCache.length) return;
+
+  const header = ["Nome", "CPF", "Progresso", "Média", "Status"];
+  const lines = studentsCache.map(s =>
+    `"${s.nome}","${s.cpf}","${s.progresso}/24","${s.media}%","${s.status}"`
+  );
+
+  const csv = [header.join(","), ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "alunos.csv";
+  link.click();
+}
+
+/* =====================================================
+   LOGOUT
+   ===================================================== */
+async function logout() {
+  await auth.signOut();
+  location.href = "index.html";
+}
+</script>
+
+</body>
+</html>
