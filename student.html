@@ -301,7 +301,17 @@ function deriveTimeTierFromTargets(p){
   if (isFinite(tc) && elapsed <= tc) return "comfort";
   return "slow";
 }
+function deriveTimeTierFromCps(p){
+  const cps = Number(p.cps);
+  if (!isFinite(cps) || cps <= 0) return null;
 
+  // thresholds simples (ajuste fino depois, mas já resolve)
+  // (conservador: só classifica "slow" se realmente for lento)
+  if (cps >= 3.0) return "fast";
+  if (cps >= 2.3) return "ideal";
+  if (cps >= 1.6) return "comfort";
+  return "slow";
+}
 /* ============================
    CSV helpers
    ============================ */
@@ -446,7 +456,7 @@ async function loadStudent(){
     for (const p of phases){
       if (!p) continue;
 
-      const tier = p.timeTier || deriveTimeTierFromTargets(p);
+     const tier = p.timeTier || deriveTimeTierFromTargets(p) || deriveTimeTierFromCps(p);
       if (!tier) continue;
 
       const oldScore = Number(p.score ?? 0);
