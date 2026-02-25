@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login - Exercício de Digitação</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #e6f2ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .login-box {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 4px 10px rgba(0,0,0,.15);
+      text-align: center;
+    }
+
+    h2 { margin-bottom: 16px; }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 1rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 1.1rem;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .error {
+      color: #b00020;
+      margin-top: 10px;
+      font-size: .95rem;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="login-box">
+  <h2>Login</h2>
+
+  <input id="name" placeholder="Nome completo" />
+  <input id="cpf" placeholder="CPF (somente números)" />
+  <input id="password" type="password" placeholder="Senha" />
+
+  <button onclick="login()">Entrar</button>
+
+  <div class="error" id="error"></div>
+</div>
+
+<script>
+/* ==================================================
+   CONFIG FIREBASE (COLE A SUA AQUI)
+   ================================================== */
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_DOMINIO.firebaseapp.com",
+  projectId: "SEU_PROJECT_ID",
+  appId: "SEU_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ==================================================
+   UTIL: VALIDAR CPF (MÓDULO 11)
+   ================================================== */
+function validarCPF(cpf) {
+  cpf = cpf.replace(/\D/g, "");
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += cpf[i] * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto != cpf[9]) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += cpf[i] * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  return resto == cpf[10];
+}
+
+/* ==================================================
+   LOGIN / CADASTRO
+   ================================================== */
+async function login() {
+  const nome = document.getElementById("name").value.trim();
+  const cpfRaw = document.getElementById("cpf").value.trim();
+  const senha = document.getElementById("password").value;
+  const errorBox = document.getElementById("error");
+
+  errorBox.innerText = "";
+
+  if (!nome || !cpfRaw || !senha) {
+    errorBox.innerText = "Preencha todos os campos.";
+    return;
+  }
+
+  if (!validarCPF(cpfRaw)) {
+    errorBox.innerText = "CPF inválido.";
+    return;
+  }
+
+  const cpf = cpfRaw.replace(/\D/g, "");
+  const email = cpf + "@alunos.local";
+
+  try {
+    // tenta login
+    const cred = await auth.signInWithEmailAndPassword(email, senha);
+    await afterLogin(cred.user);
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      // cria usuário
+      const cred = await auth.createUserWithEmailAndPassword(email, senha);
+
+      await db.collection("users").doc(cred.user.uid).set({
+        nome,
+        cpf,
+        role: "student",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      await afterLogin(cred.user);
+    } else {
+      errorBox.innerText = "Erro: senha incorreta ou problema de login.";
+    }
+  }
+}
+
+/* ==================================================
+   PÓS LOGIN: ALUNO OU PROFESSOR
+   ================================================== */
+async function afterLogin(user) {
+  const doc = await db.collection("users").doc(user.uid).get();
+
+  if (!doc.exists) {
+    alert("Usuário sem perfil.");
+    return;
+  }
+
+  const data = doc.data();
+
+  if (data.role === "teacher") {
+    window.location.href = "teacher.html";
+  } else {
+    window.location.href = "game.html";
+  }
+}
+</script>
+
+</body>
+</html>
