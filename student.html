@@ -193,7 +193,17 @@
    BOTÕES
    ============================ */
 document.getElementById("backBtn").addEventListener("click", () => history.back());
-
+  function capScoreByTimeTier(score, timeTier){
+  const caps = {
+    fast: 100,
+    ideal: 95,
+    comfort: 90,
+    slow: 80
+  };
+  const cap = caps[timeTier] ?? 100;
+  return Math.min(score, cap);
+}
+  
 /* ============================
    FIREBASE INIT
    ============================ */
@@ -398,6 +408,37 @@ async function loadStudent(){
       grades.approved
         ? '<span class="ok">APROVADO</span>'
         : '<span class="bad">EM ANDAMENTO</span>';
+  let changed = false;
+
+for (const p of phases){
+  if (!p) continue;
+  if (!p.timeTier) continue;
+
+  const oldScore = p.score ?? 0;
+  const newScore = capScoreByTimeTier(oldScore, p.timeTier);
+
+  if (newScore !== oldScore){
+    p.score = newScore;
+    p.scoreAdjusted = true; // opcional, só para auditoria
+    changed = true;
+  }
+}
+    if (changed){
+  const total = phases.reduce((acc,p)=>acc+(p?.score ?? 0), 0);
+  const count = phases.filter(Boolean).length;
+  const avg = count ? Math.round(total / count) : 0;
+  const approved = avg >= 70;
+
+  grades.average = avg;
+  grades.approved = approved;
+
+  await db.collection("grades").doc(studentUid).set({
+    phases,
+    average: avg,
+    approved,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
 
     // prepara cache para export
     exportContext = {
