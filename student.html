@@ -64,7 +64,6 @@
 
   <div class="actions">
     <button id="recalcBtn" class="danger">🔁 Recalcular notas</button>
-
     <button id="exportBtn" class="secondary">📥 Exportar CSV completo</button>
     <button id="backBtn">⬅ Voltar</button>
   </div>
@@ -175,7 +174,7 @@ function showNotice(msg){
 const params = new URLSearchParams(window.location.search);
 const studentUid = params.get("uid");
 if (!studentUid){
-  showError("Erro: UID do aluno não foi informado.\nVolte ao painel e clique no aluno novamente.");
+  showError("Erro: UID do aluno não foi informado.\\nVolte ao painel e clique no aluno novamente.");
 }
 
 /* ============================
@@ -199,7 +198,7 @@ let gradesCache = null;
 function csvEscape(v){
   if (v === null || v === undefined) return "";
   const s = String(v);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+  if (/[",\\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
   return s;
 }
 function downloadText(filename, text, mime="text/csv;charset=utf-8;"){
@@ -232,7 +231,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
       csvEscape(studentUid),csvEscape(nome),csvEscape(cpf),csvEscape(average),csvEscape(status),
       "","","","","","","","","","","","",""
     ].join(","));
-    downloadText(`relatorio_${cpf || studentUid}.csv`, lines.join("\n"));
+    downloadText(`relatorio_${cpf || studentUid}.csv`, lines.join("\\n"));
     return;
   }
 
@@ -259,7 +258,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     ].join(","));
   }
 
-  downloadText(`relatorio_${(cpf || studentUid).replace(/\D/g,'')}.csv`, lines.join("\n"));
+  downloadText(`relatorio_${(cpf || studentUid).replace(/\\D/g,'')}.csv`, lines.join("\\n"));
 });
 
 /* ============================
@@ -275,33 +274,29 @@ async function recalculateAndSave() {
   let somaNotas = 0;
   let ajustadas = 0;
 
-  // 1. Varre o cache atual das fases
   for (let i = 0; i < phasesCache.length; i++) {
     const p = phasesCache[i];
     if (!p) continue;
 
-    // Resgata os dados antigos da jogada
-    const overallPhase = p.overallPhase || (i + 1);
+    const overallPhase = Number(p.overallPhase) || (i + 1);
     const diffLabel = p.difficulty || "Fácil";
-    const errors = p.errors || 0;
-    const elapsed = p.elapsed || 999;
-    const notaAntiga = p.score || 0;
+    const errors = Number(p.errors) || 0;
+    const elapsed = Number(p.elapsed) || 999;
+    const notaAntiga = Number(p.score) || 0;
 
-    // 2. Garante a contagem de caracteres (Se estiver faltando no banco, deduzimos pela velocidade)
-    let chars = p.chars;
+    let chars = Number(p.chars);
     if (!chars || chars <= 0) {
-      chars = Math.max(1, Math.round((p.cps || 1) * elapsed));
+      chars = Math.max(1, Math.round((Number(p.cps) || 1) * elapsed));
     }
 
-    // 3. RECUPERA A LATÊNCIA REAL (O erro da Fase 17 estava aqui!)
-    const phaseNum = ((overallPhase - 1) % 8) + 1; // Mapeia a fase de 1 a 8
+    // Calcula a Latência correta baseada no número da fase
+    const phaseNum = ((overallPhase - 1) % 8) + 1;
     let latency = 0.4;
     if (phaseNum === 8) latency = 0.3;
-    else if (phaseNum === 1) latency = 1.8; // Fases 1, 9 e 17 ganham 1.8s de bônus!
+    else if (phaseNum === 1) latency = 1.8; // Fases 1, 9 e 17 têm 1.8s
     else if (phaseNum === 2) latency = 1.2;
     else if (phaseNum === 3) latency = 0.6;
 
-    // 4. Força o cálculo perfeito das metas (Ignora valores bugados do banco antigo)
     let comfortCPS = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 2.0 : 2.6);
     let idealCPS = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.3 : 2.8);
     let fastCPS = diffLabel === "Fácil" ? 2.0 : (diffLabel === "Médio" ? 2.6 : 3.0);
@@ -310,11 +305,9 @@ async function recalculateAndSave() {
     let targetIdeal = latency + (chars / idealCPS);
     let targetFast = latency + (chars / fastCPS);
 
-    // 5. Recalcula a precisão exata
     const accuracy = Math.max(0, Math.min(1, (chars - errors) / chars));
     const accuracyScore = Math.round(accuracy * 100);
 
-    // 6. Calcula a nota de tempo original
     let timeScore = 60;
     if (elapsed <= targetFast) timeScore = 100;
     else if (elapsed <= targetIdeal) timeScore = 92;
@@ -326,7 +319,6 @@ async function recalculateAndSave() {
 
     let rawScore = Math.round(accuracyScore * 0.65 + timeScore * 0.35);
 
-    // 7. APLICA A NOVA REGRA DO TETO (CAP)
     let tier = "slow";
     let cap = 70;
     if (elapsed <= targetFast) { tier = "fast"; cap = 100; }
@@ -337,7 +329,6 @@ async function recalculateAndSave() {
 
     if (finalScore !== notaAntiga) ajustadas++;
 
-    // Atualiza o objeto com os dados matematicamente perfeitos
     p.chars = chars;
     p.score = finalScore;
     p.timeTier = tier;
@@ -350,11 +341,9 @@ async function recalculateAndSave() {
     fasesValidas++;
   }
 
-  // 8. Recalcula a média geral verdadeira
   const novaMedia = fasesValidas > 0 ? Math.round(somaNotas / fasesValidas) : 0;
   const aprovado = novaMedia >= 70;
 
-  // 9. Salva no Firebase
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const studentUid = urlParams.get('uid');
@@ -366,18 +355,17 @@ async function recalculateAndSave() {
       recalculatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    alert(`✅ Sucesso!\nForam corrigidas as notas de ${ajustadas} fases.\nA nova média real é: ${novaMedia}%`);
-    location.reload(); 
+    alert(`✅ Sucesso!\\nForam corrigidas as notas de ${ajustadas} fases.\\nA nova média real é: ${novaMedia}%`);
+    location.reload();
     
   } catch(e) {
     console.error("Erro ao salvar recálculo:", e);
-    alert("Erro de permissão no Firebase. Lembre-se de logar na conta do aluno para ter permissão de alterar a própria nota.");
+    alert("Erro de permissão no Firebase. Lembre-se de iniciar sessão na conta do aluno para ter permissão de alterar a própria nota.");
   }
 }
 
-// Botão que aciona a função
 document.getElementById("recalcBtn").addEventListener("click", async () => {
-  const ok = confirm("Recalcular notas aplicando teto por tempo e salvar no Firebase?\nIsso altera as notas deste aluno.");
+  const ok = confirm("Recalcular notas aplicando teto por tempo e salvar no Firebase?\\nIsto altera as notas deste aluno.");
   if (!ok) return;
 
   try {
@@ -398,15 +386,10 @@ auth.onAuthStateChanged(async (user) => {
   if (!user){ location.href = "index.html"; return; }
 
   try{
-    // Removendo momentaneamente o bloqueio rígido do professor para você conseguir
-    // rodar isso logado na conta dela (aluno) se precisar burlar as regras de permissão.
-    // O painel agora abre tanto pra aluno quanto pra professor.
-    
     await loadStudent();
-
   } catch (err){
     console.error(err);
-    showError("Erro ao validar acesso.\n\nDetalhes:\n" + (err.message || err));
+    showError("Erro ao validar acesso.\\n\\nDetalhes:\\n" + (err.message || err));
   }
 });
 
@@ -417,7 +400,7 @@ async function loadStudent(){
 
     if (!userDoc.exists){ showError("Aluno não encontrado (users/{uid} não existe)."); return; }
     if (!gradesDoc.exists){
-      showError("Este aluno ainda não tem notas salvas (grades/{uid} não existe).\nPeça para ele jogar ao menos 1 fase.");
+      showError("Este aluno ainda não tem notas salvas (grades/{uid} não existe).\\nPeça para ele jogar ao menos 1 fase.");
       return;
     }
 
@@ -447,7 +430,7 @@ async function loadStudent(){
 
   } catch (err){
     console.error(err);
-    showError("Erro ao carregar dados do aluno.\n\nDetalhes:\n" + (err.message || err));
+    showError("Erro ao carregar dados do aluno.\\n\\nDetalhes:\\n" + (err.message || err));
   }
 }
 
@@ -457,7 +440,7 @@ async function loadStudent(){
 function renderTable(phases){
   const body = document.getElementById("phases-body");
   if (!phases.length){
-    body.innerHTML = `<tr><td colspan="7">Sem fases registradas ainda.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7">Sem fases registadas ainda.</td></tr>`;
     return;
   }
   body.innerHTML = phases.map(p => `
@@ -474,7 +457,7 @@ function renderTable(phases){
 }
 
 function renderCharts(phases){
-  if (typeof Chart === "undefined") return; // segurança
+  if (typeof Chart === "undefined") return; 
   if (scoreChartInstance) scoreChartInstance.destroy();
   if (speedChartInstance) speedChartInstance.destroy();
   if (accuracyChartInstance) accuracyChartInstance.destroy();
