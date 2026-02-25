@@ -5,53 +5,45 @@
   <title>Detalhes do Aluno</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- ✅ Firebase (Compat) - CORRIGIDO -->
+  <!-- ✅ Firebase (CORRETO) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <!-- ✅ Chart.js - CORRIGIDO -->
+  <!-- ✅ Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 
   <style>
-    body{ font-family: Arial, Helvetica, sans-serif; background:#f4f6fa; margin:0; padding:0; }
+    body{font-family:Arial,Helvetica,sans-serif;background:#f4f6fa;margin:0}
     header{
-      background:#1f2937; color:white; padding:16px 20px;
-      display:flex; justify-content:space-between; align-items:center;
-      gap:10px; flex-wrap: wrap;
+      background:#1f2937;color:white;padding:16px 20px;
+      display:flex;justify-content:space-between;align-items:center;
+      gap:10px;flex-wrap:wrap
     }
-    header h2{ margin:0; font-size:1.2rem; }
-    header .sub { font-size:.9rem; color:#d1d5db; margin-top:4px; }
-    header .actions{ display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+    header h2{margin:0;font-size:1.2rem}
+    header .sub{font-size:.9rem;color:#d1d5db}
+    header .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     header button{
-      background:#2563eb; border:none; color:white; padding:8px 14px;
-      border-radius:8px; cursor:pointer; white-space: nowrap;
+      background:#2563eb;border:none;color:white;
+      padding:8px 14px;border-radius:8px;cursor:pointer
     }
-    header button.secondary{ background:#0ea5e9; }
-    header button.danger{ background:#dc2626; }
+    header button.danger{background:#dc2626}
+    header button.secondary{background:#0ea5e9}
 
-    main{ padding:20px; }
-    .card{ background:white; border-radius:12px; padding:16px; margin-bottom:18px; box-shadow:0 4px 10px rgba(0,0,0,.06); }
-    .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; }
-    table{ width:100%; border-collapse:collapse; font-size:.9rem; }
-    th,td{ padding:8px; border-bottom:1px solid #e5e7eb; text-align:center; vertical-align: top; }
-    th{ background:#f1f5f9; font-weight:bold; }
-    .ok{ color:#15803d; font-weight:bold; }
-    .bad{ color:#b91c1c; font-weight:bold; }
-    canvas{ max-height:300px; }
-    .loading{ text-align:center; font-size:1.1rem; margin-top:40px; color:#555; }
-    .errorbox{
-      background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 10px rgba(0,0,0,.06);
-      max-width: 900px; margin: 18px auto; color:#b00020; display:none; text-align:left; white-space: pre-wrap;
-    }
-    .meta{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
-    .pill{ background:#f3f6ff; border:1px solid #d9e3ff; padding:6px 10px; border-radius:999px; font-size:.95rem; color:#333; }
-    .hint{ color:#666; font-size:.9rem; margin-top:8px; }
+    main{padding:20px}
+    .card{background:white;border-radius:12px;padding:16px;margin-bottom:18px;
+      box-shadow:0 4px 10px rgba(0,0,0,.06)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+    table{width:100%;border-collapse:collapse;font-size:.9rem}
+    th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:center}
+    th{background:#f1f5f9}
+    .pill{background:#f3f6ff;border:1px solid #d9e3ff;padding:6px 10px;border-radius:999px}
+    .ok{color:#15803d;font-weight:bold}
+    .bad{color:#b91c1c;font-weight:bold}
     .notice{
-      margin-top:10px; padding:10px 12px; border-radius:10px;
-      background:#ecfeff; border:1px solid #bae6fd; color:#075985;
-      display:none; text-align:left; white-space: pre-wrap;
-      font-size:.9rem;
+      margin-top:10px;padding:10px;border-radius:8px;
+      background:#ecfeff;border:1px solid #bae6fd;color:#075985;
+      white-space:pre-wrap;display:none
     }
   </style>
 </head>
@@ -61,430 +53,120 @@
 <header>
   <div>
     <h2 id="student-title">Aluno</h2>
-    <div class="sub" id="student-sub">Detalhes e gráficos</div>
+    <div class="sub" id="student-sub"></div>
   </div>
 
   <div class="actions">
-    <!-- ✅ Botão novo -->
     <button id="recalcBtn" class="danger">🔁 Recalcular notas</button>
-
-    <button id="exportBtn" class="secondary">📥 Exportar CSV completo</button>
-    <button id="backBtn">⬅ Voltar</button>
+    <button id="exportBtn" class="secondary">📥 Exportar CSV</button>
+    <button onclick="history.back()">⬅ Voltar</button>
   </div>
 </header>
 
 <main>
-  <div id="loading" class="loading">Carregando dados do aluno…</div>
-  <div id="errorbox" class="errorbox"></div>
+  <div class="card">
+    <div class="pill">CPF: <span id="cpf"></span></div>
+    <div class="pill">Média: <span id="avg"></span>%</div>
+    <div class="pill">Status: <span id="status"></span></div>
+    <div id="notice" class="notice"></div>
+  </div>
 
-  <div id="content" style="display:none">
-    <div class="card">
-      <div class="meta">
-        <div class="pill"><strong>CPF:</strong> <span id="cpf"></span></div>
-        <div class="pill"><strong>Média:</strong> <span id="avg"></span>%</div>
-        <div class="pill"><strong>Status:</strong> <span id="status"></span></div>
-      </div>
-      <div class="hint">O CSV completo exporta 1 linha por fase (nota, tempo, CPS, precisão, erros, targets e timeTier).</div>
-      <div id="notice" class="notice"></div>
-    </div>
+  <div class="grid">
+    <div class="card"><canvas id="scoreChart"></canvas></div>
+    <div class="card"><canvas id="speedChart"></canvas></div>
+    <div class="card"><canvas id="accuracyChart"></canvas></div>
+  </div>
 
-    <div class="grid">
-      <div class="card">
-        <h4>Evolução da Nota (Fases 1–24)</h4>
-        <canvas id="scoreChart"></canvas>
-      </div>
-      <div class="card">
-        <h4>Velocidade Média (CPS)</h4>
-        <canvas id="speedChart"></canvas>
-      </div>
-      <div class="card">
-        <h4>Precisão Média (%)</h4>
-        <canvas id="accuracyChart"></canvas>
-      </div>
-    </div>
-
-    <div class="card">
-      <h4>Detalhes por Fase</h4>
-      <table>
-        <thead>
-          <tr>
-            <th>Fase</th>
-            <th>Dificuldade</th>
-            <th>Nota</th>
-            <th>Tempo (s)</th>
-            <th>CPS</th>
-            <th>Precisão (%)</th>
-            <th>Erros</th>
-          </tr>
-        </thead>
-        <tbody id="phases-body"></tbody>
-      </table>
-    </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Fase</th><th>Dificuldade</th><th>Nota</th>
+          <th>Tempo</th><th>CPS</th><th>Precisão</th><th>Erros</th>
+        </tr>
+      </thead>
+      <tbody id="phases-body"></tbody>
+    </table>
   </div>
 </main>
 
 <script>
-/* ============================
-   BOTÕES
-   ============================ */
-document.getElementById("backBtn").addEventListener("click", () => history.back());
-
-/* ============================
-   FIREBASE INIT
-   ============================ */
 const firebaseConfig = {
-  apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
-  authDomain: "jogo-digitacao.firebaseapp.com",
-  projectId: "jogo-digitacao",
-  storageBucket: "jogo-digitacao.firebasestorage.app",
-  messagingSenderId: "903019411681",
-  appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
+  apiKey:"AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
+  authDomain:"jogo-digitacao.firebaseapp.com",
+  projectId:"jogo-digitacao"
 };
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-/* ============================
-   UI HELPERS
-   ============================ */
-const loadingEl = document.getElementById("loading");
-const contentEl = document.getElementById("content");
-const errorBoxEl = document.getElementById("errorbox");
-const noticeEl = document.getElementById("notice");
+const uid = new URLSearchParams(location.search).get("uid");
+let phasesCache=[], gradesCache=null;
 
-function showError(msg){
-  loadingEl.style.display = "none";
-  contentEl.style.display = "none";
-  errorBoxEl.style.display = "block";
-  errorBoxEl.textContent = msg;
-}
-function showContent(){
-  loadingEl.style.display = "none";
-  errorBoxEl.style.display = "none";
-  contentEl.style.display = "block";
-}
-function setStatusUI(approved){
+function setStatus(ok){
   document.getElementById("status").innerHTML =
-    approved ? '<span class="ok">APROVADO</span>' : '<span class="bad">EM ANDAMENTO</span>';
-}
-function showNotice(msg){
-  noticeEl.style.display = "block";
-  noticeEl.textContent = msg;
+    ok ? "<span class='ok'>APROVADO</span>" : "<span class='bad'>EM ANDAMENTO</span>";
 }
 
-/* ============================
-   PARAMS
-   ============================ */
-const params = new URLSearchParams(window.location.search);
-const studentUid = params.get("uid");
-if (!studentUid){
-  showError("Erro: UID do aluno não foi informado.\nVolte ao painel e clique no aluno novamente.");
+function capScoreByTimeTier(score, tier){
+  const caps={fast:100,ideal:95,comfort:90,slow:80};
+  return Math.min(score,caps[tier]??100);
 }
 
-/* ============================
-   CHART INSTANCES
-   ============================ */
-let scoreChartInstance = null;
-let speedChartInstance = null;
-let accuracyChartInstance = null;
-
-/* ============================
-   Dados carregados (para CSV e recálculo)
-   ============================ */
-let exportContext = { studentUid:"", nome:"", cpf:"", average:0, approved:false, phases:[] };
-let phasesCache = [];
-let studentCache = null;
-let gradesCache = null;
-
-/* ============================
-   CSV helpers
-   ============================ */
-function csvEscape(v){
-  if (v === null || v === undefined) return "";
-  const s = String(v);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
-  return s;
-}
-function downloadText(filename, text, mime="text/csv;charset=utf-8;"){
-  const blob = new Blob([text], { type: mime });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-}
-
-document.getElementById("exportBtn").addEventListener("click", () => {
-  if (!exportContext.studentUid){
-    alert("Ainda carregando dados do aluno.");
-    return;
-  }
-
-  const { nome, cpf, studentUid, average, approved, phases } = exportContext;
-  const status = approved ? "APROVADO" : "EM ANDAMENTO";
-
-  const header = [
-    "uid_aluno","nome","cpf","media_geral","status_geral",
-    "fase_geral","dificuldade","fase_nome",
-    "nota","tempo_s","cps","precisao_pct","erros",
-    "target_confortavel_s","target_ideal_s","target_rapido_s","time_tier","scoreAdjusted"
-  ];
-  const lines = [header.join(",")];
-
-  if (!phases || phases.length === 0){
-    lines.push([
-      csvEscape(studentUid),csvEscape(nome),csvEscape(cpf),csvEscape(average),csvEscape(status),
-      "","","","","","","","","","","","",""
-    ].join(","));
-    downloadText(`relatorio_${cpf || studentUid}.csv`, lines.join("\n"));
-    return;
-  }
-
-  for (const p of phases){
-    lines.push([
-      csvEscape(studentUid),
-      csvEscape(nome),
-      csvEscape(cpf),
-      csvEscape(average),
-      csvEscape(status),
-      csvEscape(p.overallPhase ?? ""),
-      csvEscape(p.difficulty ?? ""),
-      csvEscape(p.phase ?? ""),
-      csvEscape(p.score ?? ""),
-      csvEscape(p.elapsed ?? ""),
-      csvEscape(p.cps ?? ""),
-      csvEscape(p.accuracyPct ?? ""),
-      csvEscape(p.errors ?? ""),
-      csvEscape(p.targetComfort ?? ""),
-      csvEscape(p.targetIdeal ?? ""),
-      csvEscape(p.targetFast ?? ""),
-      csvEscape(p.timeTier ?? ""),
-      csvEscape(p.scoreAdjusted ? "true" : "")
-    ].join(","));
-  }
-
-  downloadText(`relatorio_${(cpf || studentUid).replace(/\D/g,'')}.csv`, lines.join("\n"));
-});
-
-/* ============================
-   RECÁLCULO (teto por tempo) - usado só no clique
-   ============================ */
-function capScoreByTimeTier(score, timeTier){
-  const caps = { fast:100, ideal:95, comfort:90, slow:80 };
-  const cap = caps[timeTier] ?? 100;
-  return Math.min(Number(score) || 0, cap);
-}
-
-// fallback rápido por CPS caso não exista timeTier
-function deriveTimeTierFromCps(p){
-  const cps = Number(p.cps);
-  if (!isFinite(cps) || cps <= 0) return null;
-  if (cps >= 3.0) return "fast";
-  if (cps >= 2.3) return "ideal";
-  if (cps >= 1.6) return "comfort";
+function deriveTierByTime(p){
+  const e=Number(p.elapsed);
+  if(!isFinite(e)) return null;
+  if(e<=p.targetFast) return "fast";
+  if(e<=p.targetIdeal) return "ideal";
+  if(e<=p.targetComfort) return "comfort";
   return "slow";
 }
 
-async function recalculateAndSave(){
-  if (!gradesCache || !Array.isArray(phasesCache) || phasesCache.length === 0){
-    showNotice("ℹ️ Sem fases para recalcular.");
-    return;
+async function recalc(){
+  let adjusted=0;
+  for(const p of phasesCache){
+    if(!p.targetComfort) continue;
+    const tier=p.timeTier||deriveTierByTime(p);
+    p.timeTier=tier;
+    const n=capScoreByTimeTier(p.score,tier);
+    if(n!==p.score){p.score=n;p.scoreAdjusted=true;adjusted++}
   }
 
-  let adjusted = 0;
-  let tierFilled = 0;
+  const avg=Math.round(phasesCache.reduce((a,b)=>a+b.score,0)/phasesCache.length);
+  const approved=avg>=70;
 
-  for (const p of phasesCache){
-    if (!p) continue;
+  document.getElementById("avg").innerText=avg;
+  setStatus(approved);
 
-    // garante timeTier mesmo em dados antigos
-    if (!p.timeTier){
-      const t = deriveTimeTierFromCps(p);
-      if (t){
-        p.timeTier = t;
-        tierFilled++;
-      }
-    }
+  await db.collection("grades").doc(uid).set({
+    phases:phasesCache,average:avg,approved
+  },{merge:true});
 
-    if (!p.timeTier) continue;
+  document.getElementById("notice").style.display="block";
+  document.getElementById("notice").innerText=
+    `✅ Recalculo concluído\n• Fases ajustadas: ${adjusted}\n• Nova média: ${avg}%`;
 
-    const oldScore = Number(p.score ?? 0);
-    const newScore = capScoreByTimeTier(oldScore, p.timeTier);
-
-    if (newScore !== oldScore){
-      p.score = newScore;
-      p.scoreAdjusted = true;
-      adjusted++;
-    }
-  }
-
-  const total = phasesCache.reduce((acc,p)=>acc+(Number(p?.score)||0),0);
-  const count = phasesCache.filter(Boolean).length;
-  const avg = count ? Math.round(total / count) : 0;
-  const approved = avg >= 70;
-
-  // atualiza UI
-  document.getElementById("avg").innerText = avg;
-  setStatusUI(approved);
-
-  // salva no Firestore
-  await db.collection("grades").doc(studentUid).set({
-    phases: phasesCache,
-    average: avg,
-    approved,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge:true });
-
-  // atualiza exportContext
-  exportContext.average = avg;
-  exportContext.approved = approved;
-  exportContext.phases = phasesCache;
-
-  // atualiza tabela e gráficos
-  renderTable(phasesCache);
-  renderCharts(phasesCache);
-
-  showNotice(`✅ Recalcular concluído.\n• timeTier preenchido: ${tierFilled}\n• fases ajustadas: ${adjusted}\n• nova média: ${avg}%`);
+  render(phasesCache);
 }
 
-document.getElementById("recalcBtn").addEventListener("click", async () => {
-  const ok = confirm("Recalcular notas aplicando teto por tempo e salvar no Firebase?\nIsso altera as notas deste aluno.");
-  if (!ok) return;
+document.getElementById("recalcBtn").onclick=()=>confirm("Recalcular notas?")&&recalc();
 
-  try{
-    document.getElementById("recalcBtn").disabled = true;
-    await recalculateAndSave();
-  } finally {
-    document.getElementById("recalcBtn").disabled = false;
-  }
+auth.onAuthStateChanged(async u=>{
+  const g=await db.collection("grades").doc(uid).get();
+  phasesCache=g.data().phases;
+  gradesCache=g.data();
+  document.getElementById("avg").innerText=gradesCache.average;
+  setStatus(gradesCache.approved);
+  render(phasesCache);
 });
 
-/* ============================
-   AUTH + ROLE GUARD + LOAD
-   ============================ */
-auth.onAuthStateChanged(async (user) => {
-  if (!studentUid) return;
-  if (!user){ location.href = "index.html"; return; }
-
-  try{
-    const teacherDoc = await db.collection("users").doc(user.uid).get();
-    if (!teacherDoc.exists || teacherDoc.data().role !== "teacher"){
-      location.href = "index.html";
-      return;
-    }
-
-    await loadStudent();
-
-  } catch (err){
-    console.error(err);
-    showError("Erro ao validar acesso do professor.\n\nDetalhes:\n" + (err.message || err));
-  }
-});
-
-async function loadStudent(){
-  try{
-    const userDoc = await db.collection("users").doc(studentUid).get();
-    const gradesDoc = await db.collection("grades").doc(studentUid).get();
-
-    if (!userDoc.exists){ showError("Aluno não encontrado (users/{uid} não existe)."); return; }
-    if (!gradesDoc.exists){
-      showError("Este aluno ainda não tem notas salvas (grades/{uid} não existe).\nPeça para ele jogar ao menos 1 fase.");
-      return;
-    }
-
-    studentCache = userDoc.data();
-    gradesCache = gradesDoc.data();
-    phasesCache = Array.isArray(gradesCache.phases) ? gradesCache.phases.filter(Boolean) : [];
-
-    document.getElementById("student-title").innerText = studentCache.nome || "Aluno";
-    document.getElementById("student-sub").innerText = `UID: ${studentUid}`;
-    document.getElementById("cpf").innerText = studentCache.cpf || "-";
-    document.getElementById("avg").innerText = gradesCache.average ?? 0;
-    setStatusUI(!!gradesCache.approved);
-
-    exportContext = {
-      studentUid,
-      nome: studentCache.nome || "",
-      cpf: studentCache.cpf || "",
-      average: gradesCache.average ?? 0,
-      approved: !!gradesCache.approved,
-      phases: phasesCache
-    };
-
-    renderTable(phasesCache);
-    renderCharts(phasesCache);
-
-    showContent();
-    showNotice("ℹ️ Para aplicar a nova regra, clique em “Recalcular notas”. (Só o professor pode) ");
-
-  } catch (err){
-    console.error(err);
-    showError("Erro ao carregar dados do aluno.\n\nDetalhes:\n" + (err.message || err));
-  }
-}
-
-/* ============================
-   TABLE + CHARTS
-   ============================ */
-function renderTable(phases){
-  const body = document.getElementById("phases-body");
-  if (!phases.length){
-    body.innerHTML = `<tr><td colspan="7">Sem fases registradas ainda.</td></tr>`;
-    return;
-  }
-  body.innerHTML = phases.map(p => `
-    <tr>
-      <td>${p.overallPhase ?? "-"}</td>
-      <td>${p.difficulty ?? "-"}</td>
-      <td>${p.score ?? "-"}</td>
-      <td>${p.elapsed ?? "-"}</td>
-      <td>${p.cps ?? "-"}</td>
-      <td>${p.accuracyPct ?? "-"}</td>
-      <td>${p.errors ?? "-"}</td>
-    </tr>
-  `).join("");
-}
-
-function renderCharts(phases){
-  if (typeof Chart === "undefined") return; // segurança
-  if (scoreChartInstance) scoreChartInstance.destroy();
-  if (speedChartInstance) speedChartInstance.destroy();
-  if (accuracyChartInstance) accuracyChartInstance.destroy();
-
-  const labels = phases.map(p => p.overallPhase);
-  const scores = phases.map(p => Number(p.score ?? 0));
-
-  scoreChartInstance = new Chart(document.getElementById("scoreChart"), {
-    type:"line",
-    data:{ labels, datasets:[{ label:"Nota", data:scores, borderColor:"#2563eb", backgroundColor:"rgba(37,99,235,.15)", tension:.3, fill:true }] },
-    options:{ responsive:true, scales:{ y:{ beginAtZero:true, max:100 } } }
-  });
-
-  const buckets = { "Fácil":[], "Médio":[], "Difícil":[] };
-  phases.forEach(p => { if (buckets[p.difficulty]) buckets[p.difficulty].push(p); });
-
-  const diffLabels = Object.keys(buckets);
-  const avgCps = diffLabels.map(d => {
-    const arr = buckets[d]; if (!arr.length) return 0;
-    const sum = arr.reduce((a,b)=>a+(Number(b.cps)||0), 0);
-    return Number((sum/arr.length).toFixed(2));
-  });
-  const avgAcc = diffLabels.map(d => {
-    const arr = buckets[d]; if (!arr.length) return 0;
-    const sum = arr.reduce((a,b)=>a+(Number(b.accuracyPct)||0), 0);
-    return Math.round(sum/arr.length);
-  });
-
-  speedChartInstance = new Chart(document.getElementById("speedChart"), {
-    type:"bar",
-    data:{ labels: diffLabels, datasets:[{ label:"CPS", data: avgCps, backgroundColor:"#16a34a" }] },
-    options:{ responsive:true, scales:{ y:{ beginAtZero:true } } }
-  });
-
-  accuracyChartInstance = new Chart(document.getElementById("accuracyChart"), {
-    type:"bar",
-    data:{ labels: diffLabels, datasets:[{ label:"Precisão (%)", data: avgAcc, backgroundColor:"#f59e0b" }] },
-    options:{ responsive:true, scales:{ y:{ beginAtZero:true, max:100 } } }
-  });
+function render(ph){
+  document.getElementById("phases-body").innerHTML=
+    ph.map(p=>`<tr>
+      <td>${p.overallPhase}</td><td>${p.difficulty}</td>
+      <td>${p.score}</td><td>${p.elapsed}</td>
+      <td>${p.cps}</td><td>${p.accuracyPct}</td><td>${p.errors}</td>
+    </tr>`).join("");
 }
 </script>
 
