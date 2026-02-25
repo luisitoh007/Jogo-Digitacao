@@ -5,7 +5,7 @@
   <title>Login - Exercício de Digitação</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDKs (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -20,7 +20,6 @@
       height: 100vh;
       margin: 0;
     }
-
     .login-box {
       background: #fff;
       padding: 24px;
@@ -30,16 +29,14 @@
       box-shadow: 0 4px 10px rgba(0,0,0,.15);
       text-align: center;
     }
-
     h2 { margin-bottom: 16px; }
-
     input {
       width: 100%;
       padding: 12px;
       margin: 8px 0;
       font-size: 1rem;
+      box-sizing: border-box;
     }
-
     button {
       width: 100%;
       padding: 12px;
@@ -51,11 +48,18 @@
       border-radius: 8px;
       cursor: pointer;
     }
-
     .error {
       color: #b00020;
       margin-top: 10px;
       font-size: .95rem;
+      white-space: pre-wrap;
+      text-align: left;
+    }
+    .hint {
+      color: #555;
+      font-size: .9rem;
+      margin-top: 8px;
+      text-align: left;
     }
   </style>
 </head>
@@ -66,10 +70,14 @@
   <h2>Login</h2>
 
   <input id="name" placeholder="Nome completo" />
-  <input id="cpf" placeholder="CPF (somente números)" />
-  <input id="password" type="password" placeholder="Senha" />
+  <input id="cpf" placeholder="CPF (somente números)" inputmode="numeric" />
+  <input id="password" type="password" placeholder="Senha (mínimo 6 caracteres)" />
 
   <button onclick="login()">Entrar</button>
+
+  <div class="hint">
+    Dica: se for o primeiro acesso, ele cria a conta automaticamente.
+  </div>
 
   <div class="error" id="error"></div>
 </div>
@@ -78,23 +86,12 @@
 /* ==================================================
    CONFIG FIREBASE (COLE A SUA AQUI)
    ================================================== */
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
   authDomain: "jogo-digitacao.firebaseapp.com",
   projectId: "jogo-digitacao",
-  storageBucket: "jogo-digitacao.firebasestorage.app",
-  messagingSenderId: "903019411681",
   appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 
 firebase.initializeApp(firebaseConfig);
 
@@ -129,11 +126,15 @@ async function login() {
   const cpfRaw = document.getElementById("cpf").value.trim();
   const senha = document.getElementById("password").value;
   const errorBox = document.getElementById("error");
-
   errorBox.innerText = "";
 
   if (!nome || !cpfRaw || !senha) {
     errorBox.innerText = "Preencha todos os campos.";
+    return;
+  }
+
+  if (senha.length < 6) {
+    errorBox.innerText = "A senha precisa ter no mínimo 6 caracteres.";
     return;
   }
 
@@ -150,8 +151,8 @@ async function login() {
     const cred = await auth.signInWithEmailAndPassword(email, senha);
     await afterLogin(cred.user);
   } catch (err) {
+    // se não existe, cria
     if (err.code === "auth/user-not-found") {
-      // cria usuário
       const cred = await auth.createUserWithEmailAndPassword(email, senha);
 
       await db.collection("users").doc(cred.user.uid).set({
@@ -162,9 +163,14 @@ async function login() {
       });
 
       await afterLogin(cred.user);
-    } else {
-      errorBox.innerText = "Erro: senha incorreta ou problema de login.";
+      return;
     }
+
+    // erros comuns: senha errada, API key/config incorreta, etc
+    errorBox.innerText =
+      "Falha no login.\n" +
+      `Código: ${err.code}\n` +
+      `Mensagem: ${err.message}`;
   }
 }
 
@@ -175,11 +181,16 @@ async function afterLogin(user) {
   const doc = await db.collection("users").doc(user.uid).get();
 
   if (!doc.exists) {
-    alert("Usuário sem perfil.");
-    return;
+    // Se por algum motivo não criou o perfil, cria como aluno
+    await db.collection("users").doc(user.uid).set({
+      nome: "Sem nome",
+      cpf: "desconhecido",
+      role: "student",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
   }
 
-  const data = doc.data();
+  const data = (await db.collection("users").doc(user.uid).get()).data();
 
   if (data.role === "teacher") {
     window.location.href = "teacher.html";
