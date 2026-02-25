@@ -633,7 +633,7 @@ function phaseLatency(){
   const phaseNum = currentPhaseIndex + 1;
   const isFinal = phases[currentPhaseIndex]?.type === "final";
   if (isFinal) return 0.3;
-  if (phaseNum === 1) return 1.8;
+  if (phaseNum === 1) return 3.0; // Respiro inicial de 3.0 segundos
   if (phaseNum === 2) return 1.2;
   if (phaseNum === 3) return 0.6;
   return 0.4;
