@@ -175,13 +175,9 @@ const db = firebase.firestore();
 let authChecked = false;
 
 auth.onAuthStateChanged(async (user) => {
-  // garante que só roda uma vez
-  if (authChecked) return;
-  authChecked = true;
 
-  // agora sim: decisão FINAL
+  // Se ainda não tem usuário, apenas espera
   if (!user) {
-    window.location.replace("index.html");
     return;
   }
 
@@ -189,9 +185,19 @@ auth.onAuthStateChanged(async (user) => {
     const userDoc = await db.collection("users").doc(user.uid).get();
 
     if (!userDoc.exists || userDoc.data().role !== "teacher") {
-      window.location.replace("jogo.html");
+      window.location.replace("game.html");
       return;
     }
+
+    // ✅ usuário é professor → carrega alunos
+    loadStudents();
+
+  } catch (err) {
+    console.error("Erro ao validar professor:", err);
+    alert("Erro ao validar permissão.");
+    window.location.replace("index.html");
+  }
+});
 
     // ✅ usuário é professor
     loadStudents();
