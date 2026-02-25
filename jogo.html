@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jogo de Digitação Amigável (Progressivo + Nota)</title>
+  <title>Jogo de Digitação (Firebase)</title>
+
+  <!-- Firebase SDKs (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <style>
     :root{
       --bg-color:#e6f2ff;
@@ -12,6 +18,8 @@
       --error-color:#f8d7da;
       --primary-btn:#4CAF50;
       --secondary-btn:#FF9800;
+      --danger-btn:#d32f2f;
+      --panel-bg:#ffffffcc;
     }
 
     body{
@@ -33,6 +41,7 @@
       padding: 18px;
       background:white;
       box-shadow:0 2px 5px rgba(0,0,0,.1);
+      position: relative;
     }
 
     h2{ margin: 8px 0; }
@@ -87,6 +96,7 @@
       overflow-y:auto;
     }
 
+    /* input oculto para Mac/acentos */
     #hidden-input{
       position:absolute;
       opacity:0;
@@ -161,13 +171,71 @@
     .result-box .line{ margin:6px 0; }
     .result-box .ok{ color:#1b7f35; font-weight:bold; }
     .result-box .bad{ color:#b00020; font-weight:bold; }
-
     .hr{ height:1px; background:#eee; margin:10px 0; }
+
+    /* Painel fixo de sessão */
+    .session-panel{
+      position:absolute;
+      right: 12px;
+      top: 12px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      background: var(--panel-bg);
+      backdrop-filter: blur(6px);
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid #eaeaea;
+    }
+    .session-panel .who{
+      font-size: .95rem;
+      color:#333;
+      max-width: 220px;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mini-btn{
+      font-size: .95rem;
+      padding: 8px 10px;
+      margin:0;
+      border-radius: 10px;
+      box-shadow:none;
+    }
+    #save-exit-btn{ background: var(--secondary-btn); }
+    #logout-btn{ background: var(--danger-btn); }
+
+    .loading-overlay{
+      position:fixed;
+      inset:0;
+      background:#00000055;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:999;
+      color:white;
+      font-size:1.2rem;
+      display:none;
+    }
+    .loading-card{
+      background:#111;
+      padding:16px 18px;
+      border-radius:12px;
+      width:min(520px, 92%);
+      text-align:left;
+    }
+    .loading-card .small{ color:#ddd; font-size:.95rem; margin-top:6px; }
   </style>
 </head>
 
 <body>
 <header>
+  <div class="session-panel">
+    <div class="who" id="whoami">Carregando...</div>
+    <button class="mini-btn" id="save-exit-btn" title="Salvar progresso e sair">💾 Salvar e Sair</button>
+    <button class="mini-btn" id="logout-btn" title="Sair sem continuar">🚪 Logout</button>
+  </div>
+
   <h2>
     <span id="difficulty-label">Dificuldade: Fácil</span> —
     Fase <span id="phase-number">1</span>/8
@@ -190,11 +258,11 @@
 </header>
 
 <main>
-  <p id="feedback-msg">Clique em "Começar" para iniciar!</p>
+  <p id="feedback-msg">Carregando sessão...</p>
 
   <input id="hidden-input" type="text" autocomplete="off" spellcheck="false" />
 
-  <div id="text-display">Clique em “Começar” e digite aqui!</div>
+  <div id="text-display">Aguarde...</div>
 
   <div>
     <button id="action-btn">Começar</button>
@@ -210,13 +278,51 @@
   </div>
 </main>
 
+<div class="loading-overlay" id="loading">
+  <div class="loading-card">
+    <div><strong>Sincronizando com o Firebase...</strong></div>
+    <div class="small" id="loading-msg">Carregando progresso.</div>
+  </div>
+</div>
+
 <script>
 /* =========================================================
-   JOGO DE DIGITAÇÃO — 3 DIFICULDADES + NOTA FINAL
-   - 8 fases por dificuldade (24 no total)
-   - Nota 0..100 por fase baseada em ERROS + TEMPO
-   - Média final: >=70% aprovado; <70% reprova e reinicia
-   - Acentos valem desde a Fase 2
+   FIREBASE INIT (COLE SUA CONFIG AQUI)
+   ========================================================= */
+const firebaseConfig = {
+  // COLE AQUI o firebaseConfig do seu projeto (apiKey, authDomain, projectId, appId etc)
+  // Exemplo:
+  // apiKey: "...",
+  // authDomain: "...",
+  // projectId: "...",
+  // appId: "..."
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+
+/* =========================================================
+   UI refs (sessão)
+   ========================================================= */
+const whoami = document.getElementById("whoami");
+const saveExitBtn = document.getElementById("save-exit-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const loadingOverlay = document.getElementById("loading");
+const loadingMsg = document.getElementById("loading-msg");
+
+function showLoading(msg){
+  loadingMsg.innerText = msg || "Carregando...";
+  loadingOverlay.style.display = "flex";
+}
+function hideLoading(){
+  loadingOverlay.style.display = "none";
+}
+
+/* =========================================================
+   JOGO DE DIGITAÇÃO — 3 DIFICULDADES + NOTA FINAL + MAC FIX
+   + FIREBASE: carrega/salva progresso + notas
    ========================================================= */
 
 /* ---------- util ---------- */
@@ -282,7 +388,7 @@ const poolPhrases = [
   "Amanhã cedo eu vou à escola.",
   "O céu está lindo e o vento está leve.",
   "Pegue a chave, feche a porta e venha.",
-  "Minha avó disse: “com fé, tudo melhora”.",
+  'Minha avó disse: "com fé, tudo melhora".',
   "Eu não quero pressa; quero constância.",
   "Olhe pela janela: que paisagem incrível!",
   "Você já digitou com atenção hoje?",
@@ -313,30 +419,9 @@ const literaryTexts = [
 
 /* ---------- dificuldades ---------- */
 const difficulties = [
-  {
-    key:"easy",
-    label:"Fácil",
-    picks:{ consonants:12, syllables:20, short:28, medium:24, long:18, phrases:10 },
-    secPerChar:0.22,
-    timeGraceMultiplier:1.25,
-    strictFromPhase2:false
-  },
-  {
-    key:"medium",
-    label:"Médio",
-    picks:{ consonants:16, syllables:26, short:36, medium:32, long:24, phrases:14 },
-    secPerChar:0.18,
-    timeGraceMultiplier:1.15,
-    strictFromPhase2:false
-  },
-  {
-    key:"hard",
-    label:"Difícil",
-    picks:{ consonants:18, syllables:30, short:42, medium:38, long:28, phrases:16 },
-    secPerChar:0.14,
-    timeGraceMultiplier:1.08,
-    strictFromPhase2:true
-  }
+  { key:"easy",   label:"Fácil",   picks:{ consonants:12, syllables:20, short:28, medium:24, long:18, phrases:10 }, secPerChar:0.22, timeGraceMultiplier:1.25, strictFromPhase2:false },
+  { key:"medium", label:"Médio",   picks:{ consonants:16, syllables:26, short:36, medium:32, long:24, phrases:14 }, secPerChar:0.18, timeGraceMultiplier:1.15, strictFromPhase2:false },
+  { key:"hard",   label:"Difícil", picks:{ consonants:18, syllables:30, short:42, medium:38, long:28, phrases:16 }, secPerChar:0.14, timeGraceMultiplier:1.08, strictFromPhase2:true  }
 ];
 
 /* ---------- DOM ---------- */
@@ -361,6 +446,9 @@ const finalStatus = document.getElementById("final-status");
 const finalBreakdown = document.getElementById("final-breakdown");
 
 /* ---------- estado ---------- */
+let currentUser = null;
+let userProfile = null;
+
 let difficultyIndex = 0;     // 0..2
 let currentPhaseIndex = 0;   // 0..7
 let currentWordIndex = 0;
@@ -369,7 +457,8 @@ let charIndex = 0;
 let errors = 0;
 let isPlaying = false;
 
-let phases = [];
+let phases = [];           // plano atual (8 fases)
+let phasePlanSaved = null; // objeto serializável do plano atual
 
 // timer
 let phaseStartMs = 0;
@@ -378,20 +467,104 @@ let targetSeconds = 0;
 let timerInterval = null;
 
 // notas do curso (24 fases)
-let phaseGrades = []; // cada item: {difficultyLabel, phaseLabel, score, starsText, elapsed, target, errors}
+let phaseGrades = [];      // array com 24 itens acumulados
 
-/* ---------- construção fases ---------- */
+// MAC FIX
+let isComposing = false;
+
+// Sync
+let dirty = false;         // há mudanças não salvas
+let autosaveInterval = null;
+
+/* =========================================================
+   FIRESTORE helpers
+   ========================================================= */
+function docRef(col){ return db.collection(col).doc(currentUser.uid); }
+
+async function loadUserProfile(){
+  const snap = await docRef("users").get();
+  return snap.exists ? snap.data() : null;
+}
+
+async function loadProgress(){
+  const snap = await docRef("progress").get();
+  return snap.exists ? snap.data() : null;
+}
+
+async function loadGrades(){
+  const snap = docRef("grades").get();
+  const s = await snap;
+  return s.exists ? s.data() : null;
+}
+
+async function saveProgress(reason){
+  if (!currentUser) return;
+  // serializa estado do jogo (inclui o plano das fases para continuar igual)
+  const payload = {
+    difficultyIndex,
+    currentPhaseIndex,
+    currentWordIndex,
+    charIndex,
+    currentText,
+    // plano das fases (já embaralhado/recortado)
+    phasePlan: phasePlanSaved,
+    // notas acumuladas (opcional salvar aqui também, mas mantemos em grades)
+    updatedAt: serverTimestamp(),
+    lastSaveReason: reason || "autosave"
+  };
+
+  await docRef("progress").set(payload, { merge: true });
+  dirty = false;
+}
+
+async function saveGrades(){
+  if (!currentUser) return;
+
+  const total = phaseGrades.reduce((acc,p)=>acc+(p?.score ?? 0), 0);
+  const count = phaseGrades.filter(Boolean).length;
+  const avg = count ? Math.round(total / count) : 0;
+  const approved = avg >= 70;
+
+  await docRef("grades").set({
+    phases: phaseGrades,
+    average: avg,
+    approved,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+function markDirty(){
+  dirty = true;
+}
+
+/* =========================================================
+   construção fases (e serialização do plano)
+   ========================================================= */
 function buildPhasesForDifficulty(diff){
-  phases = [
-    { name:"Vogais", type:"list", items: shuffle([...poolVowels]) },
-    { name:"Consoantes", type:"list", items: shuffle([...poolConsonants]).slice(0, Math.min(diff.picks.consonants, poolConsonants.length)) },
-    { name:"Sílabas", type:"list", items: shuffle([...poolSyllables]).slice(0, Math.min(diff.picks.syllables, poolSyllables.length)) },
-    { name:"Palavras Curtas", type:"list", items: shuffle([...poolShortWords]).slice(0, Math.min(diff.picks.short, poolShortWords.length)) },
-    { name:"Palavras Médias", type:"list", items: shuffle([...poolMediumWords]).slice(0, Math.min(diff.picks.medium, poolMediumWords.length)) },
-    { name:"Palavras Longas", type:"list", items: shuffle([...poolLongWords]).slice(0, Math.min(diff.picks.long, poolLongWords.length)) },
-    { name:"Frases", type:"list", items: shuffle([...poolPhrases]).slice(0, Math.min(diff.picks.phrases, poolPhrases.length)) },
-    { name:"Texto Literário", type:"final", items: [] }
-  ];
+  // gera um plano determinístico desta sessão (random, mas fixo enquanto não mudar)
+  const plan = {
+    name: diff.label,
+    createdAt: Date.now(),
+    phases: [
+      { name:"Vogais", type:"list", items: shuffle([...poolVowels]) },
+      { name:"Consoantes", type:"list", items: shuffle([...poolConsonants]).slice(0, Math.min(diff.picks.consonants, poolConsonants.length)) },
+      { name:"Sílabas", type:"list", items: shuffle([...poolSyllables]).slice(0, Math.min(diff.picks.syllables, poolSyllables.length)) },
+      { name:"Palavras Curtas", type:"list", items: shuffle([...poolShortWords]).slice(0, Math.min(diff.picks.short, poolShortWords.length)) },
+      { name:"Palavras Médias", type:"list", items: shuffle([...poolMediumWords]).slice(0, Math.min(diff.picks.medium, poolMediumWords.length)) },
+      { name:"Palavras Longas", type:"list", items: shuffle([...poolLongWords]).slice(0, Math.min(diff.picks.long, poolLongWords.length)) },
+      { name:"Frases", type:"list", items: shuffle([...poolPhrases]).slice(0, Math.min(diff.picks.phrases, poolPhrases.length)) },
+      { name:"Texto Literário", type:"final", items: [] }
+    ]
+  };
+
+  // aplica no runtime
+  phasePlanSaved = plan;
+  phases = plan.phases;
+}
+
+function restorePhasePlan(savedPlan){
+  phasePlanSaved = savedPlan;
+  phases = savedPlan?.phases || [];
 }
 
 /* ---------- UI helpers ---------- */
@@ -413,8 +586,7 @@ function resetPhaseStats(){
 }
 
 function overallPhaseNumber(){
-  // 1..24
-  return (difficultyIndex * 8) + (currentPhaseIndex + 1);
+  return (difficultyIndex * 8) + (currentPhaseIndex + 1); // 1..24
 }
 
 function updateHeader(){
@@ -422,7 +594,7 @@ function updateHeader(){
   difficultyLabel.innerText = `Dificuldade: ${diff.label}`;
   phaseNumber.innerText = String(currentPhaseIndex + 1);
   overallPhase.innerText = String(overallPhaseNumber());
-  phaseName.innerText = phases[currentPhaseIndex].name;
+  phaseName.innerText = phases[currentPhaseIndex]?.name || "—";
 }
 
 /* ---------- timer/target ---------- */
@@ -431,8 +603,7 @@ function startTimerAndTarget(){
   const phase = phases[currentPhaseIndex];
 
   let totalChars = 0;
-  if (phase.type === "list") totalChars = totalCharsOfItems(phase.items);
-  // fase final recalcula depois do sorteio
+  if (phase?.type === "list") totalChars = totalCharsOfItems(phase.items);
 
   targetSeconds = totalChars > 0 ? totalChars * diff.secPerChar : 0;
   targetDisplay.innerText = fmt1(targetSeconds);
@@ -486,12 +657,6 @@ function calculateStarsWithTime(err, elapsed, target){
   return "⭐ Continue praticando!";
 }
 
-/*
-  NOTA 0..100 por fase (erros + tempo):
-  - Base: 100
-  - Penalidade por erros (depende da dificuldade)
-  - Penalidade por tempo excedido (percentual acima do alvo)
-*/
 function computePhaseScore(err, elapsed, target){
   const diff = difficulties[difficultyIndex];
 
@@ -501,7 +666,6 @@ function computePhaseScore(err, elapsed, target){
   if (target > 0){
     const ratio = elapsed / target;
     if (ratio > 1){
-      // Cada 1% acima do alvo tira 0.6 ponto (hard) / 0.5 (medium) / 0.4 (easy)
       const k = diff.key === "easy" ? 0.40 : (diff.key === "medium" ? 0.50 : 0.60);
       score -= (ratio - 1) * 100 * k;
     }
@@ -515,23 +679,15 @@ function computePhaseScore(err, elapsed, target){
 function isCharCorrect(typedChar, expectedChar){
   const diff = difficulties[difficultyIndex];
   const phaseNum = currentPhaseIndex + 1; // 1..8
-  const isFinal = (phases[currentPhaseIndex].type === "final");
+  const isFinal = (phases[currentPhaseIndex]?.type === "final");
 
-  if (isFinal) return typedChar === expectedChar; // final sempre exato total
-
-  // Acentos valem desde a fase 2 => não removemos acentos
-  // Difícil: exato total desde a fase 2
-  if (diff.strictFromPhase2 && phaseNum >= 2) {
-    return typedChar === expectedChar;
-  }
-
-  // Fácil/Médio (e Difícil na fase 1): ignora só maiúsculas/minúsculas
+  if (isFinal) return typedChar === expectedChar;
+  if (diff.strictFromPhase2 && phaseNum >= 2) return typedChar === expectedChar;
   return typedChar.toLowerCase() === expectedChar.toLowerCase();
 }
 
 /* ---------- render ---------- */
 function renderText(text){
-  charIndex = 0;
   textDisplay.innerHTML = "";
   for (let i=0;i<text.length;i++){
     const sp = document.createElement("span");
@@ -542,17 +698,28 @@ function renderText(text){
   }
 }
 
+function applyCharProgress(){
+  // marca como corretos os chars já digitados ao restaurar
+  const spans = textDisplay.querySelectorAll("span");
+  for (let i=0; i<spans.length; i++){
+    spans[i].classList.remove("current");
+    if (i < charIndex) spans[i].classList.add("correct");
+  }
+  if (spans[charIndex]) spans[charIndex].classList.add("current");
+}
+
 function updateProgressUI(){
   const phase = phases[currentPhaseIndex];
-  if (phase.type === "list"){
+  if (phase?.type === "list"){
     const total = phase.items.length || 1;
     progress.style.width = ((currentWordIndex/total)*100) + "%";
   } else {
     progress.style.width = currentText ? ((charIndex/currentText.length)*100) + "%" : "0%";
   }
 }
+
 function updateFinalProgress(){
-  if (phases[currentPhaseIndex].type === "final" && currentText){
+  if (phases[currentPhaseIndex]?.type === "final" && currentText){
     progress.style.width = ((charIndex/currentText.length)*100) + "%";
   }
 }
@@ -560,6 +727,7 @@ function updateFinalProgress(){
 /* ---------- carregar item ---------- */
 function loadItem(){
   const phase = phases[currentPhaseIndex];
+  if (!phase) return;
 
   if (phase.type === "final"){
     loadFinalText();
@@ -567,17 +735,22 @@ function loadItem(){
   }
 
   currentText = phase.items[currentWordIndex];
+  charIndex = 0;
   renderText(currentText);
   hiddenInput.value = "";
 }
 
 function loadFinalText(){
   const diff = difficulties[difficultyIndex];
-  const idx = Math.floor(Math.random() * literaryTexts.length);
-  currentText = literaryTexts[idx];
+
+  // se já existe currentText por restore, só renderiza
+  if (!currentText || currentText.length < 5){
+    const idx = Math.floor(Math.random() * literaryTexts.length);
+    currentText = literaryTexts[idx];
+  }
+
   renderText(currentText);
 
-  // alvo recalculado pelo texto sorteado
   targetSeconds = currentText.length * diff.secPerChar;
   targetDisplay.innerText = fmt1(targetSeconds);
 
@@ -586,21 +759,10 @@ function loadFinalText(){
   hiddenInput.value = "";
 }
 
-/* ---------- controle: iniciar / avançar ---------- */
+/* ---------- controle ---------- */
 function startGame(){
-  // reset de tudo (inclusive notas)
-  phaseGrades = [];
+  // inicia do estado atual (pode ser restore)
   finalReport.style.display = "none";
-  finalBreakdown.innerHTML = "";
-  finalStatus.innerHTML = "";
-
-  difficultyIndex = 0;
-  currentPhaseIndex = 0;
-  currentWordIndex = 0;
-
-  buildPhasesForDifficulty(difficulties[difficultyIndex]);
-  updateHeader();
-
   feedbackMsg.innerText = "Digite a letra sublinhada.";
   changeTextBtn.style.display = "none";
   textDisplay.style.textAlign = "left";
@@ -612,8 +774,17 @@ function startGame(){
   hiddenInput.focus();
 
   startTimerAndTarget();
-  loadItem();
+
+  // se não tiver currentText, carrega
+  if (!currentText) loadItem();
+  else {
+    renderText(currentText);
+    applyCharProgress();
+  }
+  updateHeader();
   updateProgressUI();
+
+  markDirty();
 }
 
 function continueToNextPhase(){
@@ -632,22 +803,22 @@ function continueToNextPhase(){
   startTimerAndTarget();
   loadItem();
   updateProgressUI();
+
+  markDirty();
 }
 
-function restartAttempt(){
-  // Reprovação: reinicia o jogo (nova tentativa)
-  startGame();
-}
-
-/* ---------- BOTÕES ---------- */
-actionBtn.addEventListener("click", () => {
+/* ---------- botões ---------- */
+actionBtn.addEventListener("click", async () => {
   const mode = actionBtn.dataset.mode || "start";
   if (mode === "start") startGame();
   else if (mode === "next") continueToNextPhase();
-  else if (mode === "retry") restartAttempt();
-  else if (mode === "restart") location.reload();
+  else if (mode === "retry") {
+    // reprovação: reinicia tentativa do zero
+    await resetProgressInFirestore();
+    location.reload();
+  } else if (mode === "restart") location.reload();
 });
-changeTextBtn.addEventListener("click", loadFinalText);
+changeTextBtn.addEventListener("click", () => { currentText = ""; loadFinalText(); markDirty(); });
 
 textDisplay.addEventListener("click", () => hiddenInput.focus());
 document.body.addEventListener("click", () => { if (isPlaying) hiddenInput.focus(); });
@@ -657,20 +828,25 @@ document.addEventListener("keydown", (e) => {
     const mode = actionBtn.dataset.mode || "start";
     if (mode === "start") startGame();
     else if (mode === "next") continueToNextPhase();
-    else if (mode === "retry") restartAttempt();
+    else if (mode === "retry") location.reload();
   }
 });
 
-/* ---------- digitação ---------- */
-hiddenInput.addEventListener("input", () => {
-  if (!isPlaying){ hiddenInput.value=""; return; }
+/* =========================================================
+   ✅ MAC FIX (dead keys)
+   ========================================================= */
+function processTypedText(text){
+  if (!text) return;
+  for (const ch of text){
+    if (!isPlaying) break;
+    processTypedChar(ch);
+  }
+}
 
-  const typedVal = hiddenInput.value;
-  const typedChar = typedVal.slice(-1);
-  if (!typedChar) return;
-
+function processTypedChar(typedChar){
   const expectedChar = currentText[charIndex];
   const spans = textDisplay.querySelectorAll("span");
+  if (!expectedChar || !spans[charIndex]) return;
 
   if (isCharCorrect(typedChar, expectedChar)){
     spans[charIndex].classList.remove("current");
@@ -679,6 +855,7 @@ hiddenInput.addEventListener("input", () => {
 
     charIndex++;
     updateFinalProgress();
+    markDirty();
 
     if (charIndex === currentText.length){
       const phase = phases[currentPhaseIndex];
@@ -695,6 +872,7 @@ hiddenInput.addEventListener("input", () => {
             loadItem();
             updateProgressUI();
             isPlaying = true;
+            markDirty();
           }, 220);
         }
       }
@@ -707,6 +885,7 @@ hiddenInput.addEventListener("input", () => {
     errors++;
     errorsDisplay.innerText = String(errors);
     flashScreen("red");
+    markDirty();
 
     if (phases[currentPhaseIndex].type === "final"){
       feedbackMsg.innerText = "Atenção a maiúsculas, minúsculas e acentos!";
@@ -714,40 +893,92 @@ hiddenInput.addEventListener("input", () => {
       feedbackMsg.innerText = "No Difícil, a partir da Fase 2 é exato (maiúsculas e acentos)!";
     }
   }
+}
 
+hiddenInput.addEventListener("compositionstart", () => { isComposing = true; });
+
+hiddenInput.addEventListener("compositionend", (event) => {
+  isComposing = false;
+  if (!isPlaying){ hiddenInput.value = ""; return; }
+  const composed = (event.data ?? hiddenInput.value);
+  processTypedText(composed);
   hiddenInput.value = "";
 });
 
-/* ---------- FINALIZAR FASE + guardar nota ---------- */
-function finishPhase(){
+hiddenInput.addEventListener("input", (event) => {
+  if (!isPlaying){ hiddenInput.value = ""; return; }
+  if (event.isComposing || isComposing || event.inputType === "insertCompositionText") return;
+  const data = (event.data ?? hiddenInput.value);
+  processTypedText(data);
+  hiddenInput.value = "";
+});
+
+/* ---------- FIREBASE: reset progress (reprovação) ---------- */
+async function resetProgressInFirestore(){
+  if (!currentUser) return;
+  await docRef("progress").set({
+    difficultyIndex: 0,
+    currentPhaseIndex: 0,
+    currentWordIndex: 0,
+    charIndex: 0,
+    currentText: "",
+    phasePlan: null,
+    updatedAt: serverTimestamp()
+  }, { merge: false });
+
+  await docRef("grades").set({
+    phases: [],
+    average: 0,
+    approved: false,
+    updatedAt: serverTimestamp()
+  }, { merge: false });
+}
+
+/* ---------- FINALIZAR FASE + guardar nota + salvar firebase ---------- */
+async function finishPhase(){
   stopTimer();
   isPlaying = false;
   progress.style.width = "100%";
 
-  // estrelas (texto) + NOTA numérica
   const starsText = calculateStarsWithTime(errors, phaseElapsed, targetSeconds);
   starsDisplay.innerText = starsText;
 
   const phaseScore = computePhaseScore(errors, phaseElapsed, targetSeconds);
   phaseScoreDisplay.innerText = String(phaseScore);
 
-  // guarda no boletim (24 fases)
-  phaseGrades.push({
+  // garante array de 24 posições
+  if (!Array.isArray(phaseGrades)) phaseGrades = [];
+  const idxOverall = overallPhaseNumber() - 1; // 0..23
+
+  phaseGrades[idxOverall] = {
+    overallPhase: overallPhaseNumber(),
     difficulty: difficulties[difficultyIndex].label,
     phase: `${currentPhaseIndex + 1}/8 - ${phases[currentPhaseIndex].name}`,
     score: phaseScore,
     starsText,
-    elapsed: phaseElapsed,
-    target: targetSeconds,
-    errors
-  });
+    elapsed: Math.round(phaseElapsed * 10) / 10,
+    target: Math.round(targetSeconds * 10) / 10,
+    errors,
+    savedAt: Date.now()
+  };
 
   // avança fase
   currentPhaseIndex++;
   currentWordIndex = 0;
+  charIndex = 0;
+  currentText = "";
   changeTextBtn.style.display = "none";
 
-  // terminou as 8 fases desta dificuldade?
+  // salva notas e progresso
+  try{
+    showLoading("Salvando notas e progresso...");
+    await saveGrades();
+    await saveProgress("finishPhase");
+  } finally {
+    hideLoading();
+  }
+
+  // terminou 8 fases desta dificuldade?
   if (currentPhaseIndex >= phases.length){
     difficultyIndex++;
 
@@ -757,9 +988,11 @@ function finishPhase(){
       return;
     }
 
-    // próxima dificuldade: volta para fase 1
+    // próxima dificuldade: volta para fase 1 e gera novo plano
     currentPhaseIndex = 0;
     currentWordIndex = 0;
+    charIndex = 0;
+    currentText = "";
 
     buildPhasesForDifficulty(difficulties[difficultyIndex]);
     updateHeader();
@@ -769,29 +1002,32 @@ function finishPhase(){
     textDisplay.style.textAlign = "center";
 
     setButton("next", "Próxima Fase");
+    markDirty();
+    await saveProgress("newDifficulty");
     return;
   }
 
-  // fase normal
   updateHeader();
   feedbackMsg.innerText = "Fase concluída! " + starsText;
   textDisplay.innerHTML = "🌟";
   textDisplay.style.textAlign = "center";
   setButton("next", "Próxima Fase");
+
+  markDirty();
 }
 
 /* ---------- RELATÓRIO FINAL: média >=70 passa, <70 reinicia ---------- */
 function showFinalGradeAndDecide(){
-  // calcula média
-  const total = phaseGrades.reduce((acc, p) => acc + p.score, 0);
-  const avg = phaseGrades.length ? (total / phaseGrades.length) : 0;
+  const total = phaseGrades.reduce((acc, p) => acc + (p?.score ?? 0), 0);
+  const count = phaseGrades.filter(Boolean).length;
+  const avg = count ? (total / count) : 0;
   const avgRound = Math.round(avg);
 
   finalAverage.innerText = String(avgRound);
 
-  // breakdown por dificuldade (média de cada bloco)
   const byDiff = {};
   for (const p of phaseGrades){
+    if (!p) continue;
     if (!byDiff[p.difficulty]) byDiff[p.difficulty] = [];
     byDiff[p.difficulty].push(p.score);
   }
@@ -811,14 +1047,12 @@ function showFinalGradeAndDecide(){
 
   finalReport.style.display = "block";
 
-  // decisão
   if (avg >= 70){
     feedbackMsg.innerText = "Aprovado! Você pode ir embora da aula. ✅";
     textDisplay.innerHTML = "🏆✅ PARABÉNS! ✅🏆";
     textDisplay.style.textAlign = "center";
     finalStatus.innerHTML = `<span class="ok">Status: APROVADO</span> — Média ≥ 70%.`;
 
-    // opcional: permitir reiniciar por vontade própria
     setButton("restart", "Jogar de Novo (Opcional)");
   } else {
     feedbackMsg.innerText = "Nota abaixo de 70%. Você deve reiniciar a atividade. ❌";
@@ -826,23 +1060,137 @@ function showFinalGradeAndDecide(){
     textDisplay.style.textAlign = "center";
     finalStatus.innerHTML = `<span class="bad">Status: REPROVADO</span> — Média < 70%.`;
 
-    // obrigatoriamente reiniciar
     setButton("retry", "Reiniciar");
   }
 }
 
-/* ---------- init ---------- */
-(function init(){
-  actionBtn.dataset.mode = "start";
-  difficultyLabel.innerText = "Dificuldade: Fácil";
-  phaseNumber.innerText = "1";
-  overallPhase.innerText = "1";
-  phaseName.innerText = "O Básico";
-  timeDisplay.innerText = "0.0";
-  errorsDisplay.innerText = "0";
-  targetDisplay.innerText = "0.0";
-  phaseScoreDisplay.innerText = "—";
-})();
+/* =========================================================
+   ✅ Sessão Firebase + Restore do progresso
+   ========================================================= */
+async function initAfterAuth(user){
+  currentUser = user;
+
+  showLoading("Carregando perfil...");
+  userProfile = await loadUserProfile();
+
+  if (!userProfile){
+    // se não existir, manda pro login (isso não deveria acontecer)
+    hideLoading();
+    alert("Perfil não encontrado. Volte ao login.");
+    window.location.href = "index.html";
+    return;
+  }
+
+  whoami.innerText = `${userProfile.nome || "Aluno"} (${userProfile.cpf || "CPF"})`;
+
+  // Se for professor, não entra no jogo
+  if (userProfile.role === "teacher"){
+    hideLoading();
+    window.location.href = "teacher.html";
+    return;
+  }
+
+  showLoading("Carregando progresso...");
+  const progressData = await loadProgress();
+
+  showLoading("Carregando notas...");
+  const gradesData = await loadGrades();
+
+  // restaura notas
+  phaseGrades = (gradesData && Array.isArray(gradesData.phases)) ? gradesData.phases : [];
+
+  // restaura progresso do jogo
+  if (progressData && progressData.phasePlan && progressData.phasePlan.phases){
+    difficultyIndex = progressData.difficultyIndex ?? 0;
+    restorePhasePlan(progressData.phasePlan);
+
+    currentPhaseIndex = progressData.currentPhaseIndex ?? 0;
+    currentWordIndex = progressData.currentWordIndex ?? 0;
+    charIndex = progressData.charIndex ?? 0;
+    currentText = progressData.currentText ?? "";
+
+    // garante limites
+    if (difficultyIndex < 0 || difficultyIndex > 2) difficultyIndex = 0;
+    if (currentPhaseIndex < 0 || currentPhaseIndex > 7) currentPhaseIndex = 0;
+
+    feedbackMsg.innerText = "Progresso carregado! Clique em “Começar” para continuar.";
+    setButton("start", "Continuar");
+  } else {
+    // novo aluno: cria plano inicial
+    difficultyIndex = 0;
+    buildPhasesForDifficulty(difficulties[difficultyIndex]);
+    currentPhaseIndex = 0;
+    currentWordIndex = 0;
+    charIndex = 0;
+    currentText = "";
+
+    feedbackMsg.innerText = "Clique em “Começar” para iniciar!";
+    setButton("start", "Começar");
+  }
+
+  // UI inicial
+  updateHeader();
+  textDisplay.innerHTML = "Clique em “Começar” e digite aqui!";
+  textDisplay.style.textAlign = "center";
+  hideLoading();
+
+  // autosave periódico (a cada 20s)
+  if (autosaveInterval) clearInterval(autosaveInterval);
+  autosaveInterval = setInterval(async () => {
+    if (!currentUser) return;
+    if (!dirty) return;
+    try{
+      await saveProgress("interval");
+    } catch(e){
+      // silencioso para não atrapalhar aula
+      console.warn("Autosave falhou:", e?.code || e?.message || e);
+    }
+  }, 20000);
+}
+
+/* Guard de rota: precisa estar logado */
+auth.onAuthStateChanged(async (user) => {
+  if (!user){
+    window.location.href = "index.html";
+    return;
+  }
+  await initAfterAuth(user);
+});
+
+/* =========================================================
+   Botões de sessão: salvar/sair/logout
+   ========================================================= */
+saveExitBtn.addEventListener("click", async () => {
+  if (!currentUser){
+    window.location.href = "index.html";
+    return;
+  }
+  try{
+    showLoading("Salvando e saindo...");
+    await saveGrades();
+    await saveProgress("saveExit");
+  } finally {
+    hideLoading();
+  }
+  await auth.signOut();
+  window.location.href = "index.html";
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await auth.signOut();
+  window.location.href = "index.html";
+});
+
+/* =========================================================
+   Aviso ao fechar se houver mudanças não salvas
+   (não bloqueia fechamento, mas avisa)
+   ========================================================= */
+window.addEventListener("beforeunload", (e) => {
+  if (dirty){
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 </script>
 </body>
 </html>
