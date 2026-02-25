@@ -297,9 +297,10 @@ async function recalculateAndSave() {
     else if (phaseNum === 2) latency = 1.2;
     else if (phaseNum === 3) latency = 0.6;
 
-    let comfortCPS = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 2.0 : 2.6);
-    let idealCPS = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.3 : 2.8);
-    let fastCPS = diffLabel === "Fácil" ? 2.0 : (diffLabel === "Médio" ? 2.6 : 3.0);
+   // 4. Força o cálculo perfeito das metas (Agora com parâmetros mais justos!)
+    let comfortCPS = diffLabel === "Fácil" ? 1.0 : (diffLabel === "Médio" ? 1.5 : 2.0);
+    let idealCPS   = diffLabel === "Fácil" ? 1.4 : (diffLabel === "Médio" ? 1.8 : 2.4);
+    let fastCPS    = diffLabel === "Fácil" ? 1.8 : (diffLabel === "Médio" ? 2.2 : 2.8);
 
     let targetComfort = latency + (chars / comfortCPS);
     let targetIdeal = latency + (chars / idealCPS);
