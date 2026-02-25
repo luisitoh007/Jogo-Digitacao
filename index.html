@@ -133,12 +133,10 @@ async function login() {
     errorBox.innerText = "Preencha todos os campos.";
     return;
   }
-
   if (senha.length < 6) {
     errorBox.innerText = "A senha precisa ter no mínimo 6 caracteres.";
     return;
   }
-
   if (!validarCPF(cpfRaw)) {
     errorBox.innerText = "CPF inválido.";
     return;
@@ -148,33 +146,53 @@ async function login() {
   const email = cpf + "@alunos.local";
 
   try {
-    // tenta login
+    // 1) tenta logar
     const cred = await auth.signInWithEmailAndPassword(email, senha);
     await afterLogin(cred.user);
+    return;
   } catch (err) {
-    // se não existe, cria
-    if (err.code === "auth/user-not-found") {
-      const cred = await auth.createUserWithEmailAndPassword(email, senha);
+    // 2) com email enumeration protection, user-not-found pode virar invalid-credential
+    if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found") {
+      try {
+        // tenta criar usuário
+        const cred = await auth.createUserWithEmailAndPassword(email, senha);
 
-      await db.collection("users").doc(cred.user.uid).set({
-        nome,
-        cpf,
-        role: "student",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+        await db.collection("users").doc(cred.user.uid).set({
+          nome,
+          cpf,
+          role: "student",
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-      await afterLogin(cred.user);
-      return;
+        await afterLogin(cred.user);
+        return;
+
+      } catch (createErr) {
+        // se já existe, então é senha errada (ou tentativa repetida)
+        if (createErr.code === "auth/email-already-in-use") {
+          errorBox.innerText = "Este CPF já está cadastrado. Senha incorreta.";
+          return;
+        }
+        if (createErr.code === "auth/operation-not-allowed") {
+          errorBox.innerText = "Email/Senha não está habilitado no Firebase Auth (Sign-in method).";
+          return;
+        }
+        errorBox.innerText =
+          "Falha ao criar conta.\n" +
+          `Código: ${createErr.code}\n` +
+          `Mensagem: ${createErr.message}`;
+        return;
+      }
     }
 
-    // erros comuns: senha errada, API key/config incorreta, etc
+    // outros erros
     errorBox.innerText =
       "Falha no login.\n" +
       `Código: ${err.code}\n` +
       `Mensagem: ${err.message}`;
   }
 }
-
+  
 /* ==================================================
    PÓS LOGIN: ALUNO OU PROFESSOR
    ================================================== */
