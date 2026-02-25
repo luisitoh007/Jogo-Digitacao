@@ -5,13 +5,13 @@
   <title>Detalhes do Aluno</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Firebase (Compat) -->
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js</script>
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js</script>
-  https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js</script>
+  <!-- ✅ Firebase (Compat) - CORRIGIDO -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <!-- Chart.js -->
-  https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js</script>
+  <!-- ✅ Chart.js - CORRIGIDO -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 
   <style>
     body{ font-family: Arial, Helvetica, sans-serif; background:#f4f6fa; margin:0; padding:0; }
@@ -28,6 +28,7 @@
       border-radius:8px; cursor:pointer; white-space: nowrap;
     }
     header button.secondary{ background:#0ea5e9; }
+    header button.danger{ background:#dc2626; }
 
     main{ padding:20px; }
     .card{ background:white; border-radius:12px; padding:16px; margin-bottom:18px; box-shadow:0 4px 10px rgba(0,0,0,.06); }
@@ -64,6 +65,9 @@
   </div>
 
   <div class="actions">
+    <!-- ✅ Botão novo -->
+    <button id="recalcBtn" class="danger">🔁 Recalcular notas</button>
+
     <button id="exportBtn" class="secondary">📥 Exportar CSV completo</button>
     <button id="backBtn">⬅ Voltar</button>
   </div>
@@ -163,6 +167,10 @@ function setStatusUI(approved){
   document.getElementById("status").innerHTML =
     approved ? '<span class="ok">APROVADO</span>' : '<span class="bad">EM ANDAMENTO</span>';
 }
+function showNotice(msg){
+  noticeEl.style.display = "block";
+  noticeEl.textContent = msg;
+}
 
 /* ============================
    PARAMS
@@ -181,10 +189,16 @@ let speedChartInstance = null;
 let accuracyChartInstance = null;
 
 /* ============================
-   CSV Export context
+   Dados carregados (para CSV e recálculo)
    ============================ */
 let exportContext = { studentUid:"", nome:"", cpf:"", average:0, approved:false, phases:[] };
+let phasesCache = [];
+let studentCache = null;
+let gradesCache = null;
 
+/* ============================
+   CSV helpers
+   ============================ */
 function csvEscape(v){
   if (v === null || v === undefined) return "";
   const s = String(v);
@@ -252,7 +266,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
 });
 
 /* ============================
-   RECÁLCULO robusto (teto por tempo)
+   RECÁLCULO (teto por tempo) - usado só no clique
    ============================ */
 function capScoreByTimeTier(score, timeTier){
   const caps = { fast:100, ideal:95, comfort:90, slow:80 };
@@ -260,85 +274,95 @@ function capScoreByTimeTier(score, timeTier){
   return Math.min(Number(score) || 0, cap);
 }
 
-// fase dentro da dificuldade: 1..8
-function phaseNumInDifficulty(overallPhase){
-  const n = Number(overallPhase);
-  if (!isFinite(n) || n <= 0) return null;
-  return ((n - 1) % 8) + 1;
-}
-function phaseLatencyByPhaseNum(phaseNum, isFinal){
-  if (isFinal) return 0.3;
-  if (phaseNum === 1) return 1.8;
-  if (phaseNum === 2) return 1.2;
-  if (phaseNum === 3) return 0.6;
-  return 0.4;
-}
-
-// CPS alvo por dificuldade (os mesmos conceitos do game)
-const cpsTargets = {
-  "Fácil":   { comfort: 1.4, ideal: 1.8, fast: 2.0 },
-  "Médio":   { comfort: 2.0, ideal: 2.3, fast: 2.6 },
-  "Difícil": { comfort: 2.6, ideal: 2.8, fast: 3.0 }
-};
-
-function deriveTimeTierFromTargets(p){
-  const elapsed = Number(p.elapsed);
-  if (!isFinite(elapsed)) return null;
-
-  const tf = Number(p.targetFast);
-  const ti = Number(p.targetIdeal);
-  const tc = Number(p.targetComfort);
-
-  if (isFinite(tf) && elapsed <= tf) return "fast";
-  if (isFinite(ti) && elapsed <= ti) return "ideal";
-  if (isFinite(tc) && elapsed <= tc) return "comfort";
-
-  // se tem pelo menos conforto válido e passou, é slow
-  if (isFinite(tc)) return "slow";
-  return null;
-}
-
-// Reconstrói targets quando não existem (usando chars ou cps*elapsed + latência)
-function deriveTimeTierByReconstructedTargets(p){
-  const elapsed = Number(p.elapsed);
-  if (!isFinite(elapsed)) return null;
-
-  const diff = cpsTargets[p.difficulty];
-  if (!diff) return null;
-
-  const phaseNum = phaseNumInDifficulty(p.overallPhase);
-  const isFinal = (String(p.phase || "").toLowerCase().includes("texto") || p.phase?.includes("Texto Literário"));
-  const latency = phaseLatencyByPhaseNum(phaseNum, isFinal);
-
-  // chars: usa p.chars se existir; senão aproxima por cps*elapsed
-  let chars = Number(p.chars);
-  if (!isFinite(chars) || chars <= 0){
-    const cps = Number(p.cps);
-    if (isFinite(cps) && cps > 0) chars = cps * elapsed;
-  }
-  if (!isFinite(chars) || chars <= 0) return null;
-
-  const tFast = latency + (chars / diff.fast);
-  const tIdeal = latency + (chars / diff.ideal);
-  const tComfort = latency + (chars / diff.comfort);
-
-  // guarda targets reconstruídos (útil para auditoria/CSV)
-  p.targetFast = p.targetFast ?? Number(tFast.toFixed(1));
-  p.targetIdeal = p.targetIdeal ?? Number(tIdeal.toFixed(1));
-  p.targetComfort = p.targetComfort ?? Number(tComfort.toFixed(1));
-
-  if (elapsed <= tFast) return "fast";
-  if (elapsed <= tIdeal) return "ideal";
-  if (elapsed <= tComfort) return "comfort";
+// fallback rápido por CPS caso não exista timeTier
+function deriveTimeTierFromCps(p){
+  const cps = Number(p.cps);
+  if (!isFinite(cps) || cps <= 0) return null;
+  if (cps >= 3.0) return "fast";
+  if (cps >= 2.3) return "ideal";
+  if (cps >= 1.6) return "comfort";
   return "slow";
 }
 
+async function recalculateAndSave(){
+  if (!gradesCache || !Array.isArray(phasesCache) || phasesCache.length === 0){
+    showNotice("ℹ️ Sem fases para recalcular.");
+    return;
+  }
+
+  let adjusted = 0;
+  let tierFilled = 0;
+
+  for (const p of phasesCache){
+    if (!p) continue;
+
+    // garante timeTier mesmo em dados antigos
+    if (!p.timeTier){
+      const t = deriveTimeTierFromCps(p);
+      if (t){
+        p.timeTier = t;
+        tierFilled++;
+      }
+    }
+
+    if (!p.timeTier) continue;
+
+    const oldScore = Number(p.score ?? 0);
+    const newScore = capScoreByTimeTier(oldScore, p.timeTier);
+
+    if (newScore !== oldScore){
+      p.score = newScore;
+      p.scoreAdjusted = true;
+      adjusted++;
+    }
+  }
+
+  const total = phasesCache.reduce((acc,p)=>acc+(Number(p?.score)||0),0);
+  const count = phasesCache.filter(Boolean).length;
+  const avg = count ? Math.round(total / count) : 0;
+  const approved = avg >= 70;
+
+  // atualiza UI
+  document.getElementById("avg").innerText = avg;
+  setStatusUI(approved);
+
+  // salva no Firestore
+  await db.collection("grades").doc(studentUid).set({
+    phases: phasesCache,
+    average: avg,
+    approved,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge:true });
+
+  // atualiza exportContext
+  exportContext.average = avg;
+  exportContext.approved = approved;
+  exportContext.phases = phasesCache;
+
+  // atualiza tabela e gráficos
+  renderTable(phasesCache);
+  renderCharts(phasesCache);
+
+  showNotice(`✅ Recalcular concluído.\n• timeTier preenchido: ${tierFilled}\n• fases ajustadas: ${adjusted}\n• nova média: ${avg}%`);
+}
+
+document.getElementById("recalcBtn").addEventListener("click", async () => {
+  const ok = confirm("Recalcular notas aplicando teto por tempo e salvar no Firebase?\nIsso altera as notas deste aluno.");
+  if (!ok) return;
+
+  try{
+    document.getElementById("recalcBtn").disabled = true;
+    await recalculateAndSave();
+  } finally {
+    document.getElementById("recalcBtn").disabled = false;
+  }
+});
+
 /* ============================
-   AUTH GUARD + LOAD
+   AUTH + ROLE GUARD + LOAD
    ============================ */
 auth.onAuthStateChanged(async (user) => {
   if (!studentUid) return;
-
   if (!user){ location.href = "index.html"; return; }
 
   try{
@@ -347,7 +371,9 @@ auth.onAuthStateChanged(async (user) => {
       location.href = "index.html";
       return;
     }
+
     await loadStudent();
+
   } catch (err){
     console.error(err);
     showError("Erro ao validar acesso do professor.\n\nDetalhes:\n" + (err.message || err));
@@ -365,98 +391,30 @@ async function loadStudent(){
       return;
     }
 
-    const user = userDoc.data();
-    const grades = gradesDoc.data();
-    const phases = Array.isArray(grades.phases) ? grades.phases.filter(Boolean) : [];
+    studentCache = userDoc.data();
+    gradesCache = gradesDoc.data();
+    phasesCache = Array.isArray(gradesCache.phases) ? gradesCache.phases.filter(Boolean) : [];
 
-    document.getElementById("student-title").innerText = user.nome || "Aluno";
+    document.getElementById("student-title").innerText = studentCache.nome || "Aluno";
     document.getElementById("student-sub").innerText = `UID: ${studentUid}`;
-    document.getElementById("cpf").innerText = user.cpf || "-";
-    document.getElementById("avg").innerText = grades.average ?? 0;
-    setStatusUI(!!grades.approved);
+    document.getElementById("cpf").innerText = studentCache.cpf || "-";
+    document.getElementById("avg").innerText = gradesCache.average ?? 0;
+    setStatusUI(!!gradesCache.approved);
 
-    // ===== RECÁLCULO =====
-    let changed = false;
-    let adjustedCount = 0;
-    let noElapsed = 0;
-    let noTierPossible = 0;
-
-    for (const p of phases){
-      if (!p) continue;
-
-      const elapsed = Number(p.elapsed);
-      if (!isFinite(elapsed)){
-        noElapsed++;
-        continue;
-      }
-
-      // tenta: tier salvo → derivar por targets → reconstruir targets → sem tier
-      let tier = p.timeTier || deriveTimeTierFromTargets(p) || deriveTimeTierByReconstructedTargets(p);
-      if (!tier){
-        noTierPossible++;
-        continue;
-      }
-
-      // aplica teto
-      const oldScore = Number(p.score ?? 0);
-      const newScore = capScoreByTimeTier(oldScore, tier);
-
-      if (p.timeTier !== tier){
-        p.timeTier = tier;
-        changed = true;
-      }
-
-      if (newScore !== oldScore){
-        p.score = newScore;
-        p.scoreAdjusted = true;
-        changed = true;
-        adjustedCount++;
-      }
-    }
-
-    if (changed){
-      const total = phases.reduce((acc,p)=>acc+(Number(p?.score) || 0), 0);
-      const count = phases.filter(Boolean).length;
-      const avg = count ? Math.round(total / count) : 0;
-      const approved = avg >= 70;
-
-      document.getElementById("avg").innerText = avg;
-      setStatusUI(approved);
-
-      await db.collection("grades").doc(studentUid).set({
-        phases,
-        average: avg,
-        approved,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      noticeEl.style.display = "block";
-      noticeEl.textContent =
-        `✅ Reavaliação aplicada.\n` +
-        `• Fases ajustadas (teto por tempo): ${adjustedCount}\n` +
-        `• Fases sem "elapsed": ${noElapsed}\n` +
-        `• Fases sem dados suficientes p/ tier: ${noTierPossible}`;
-    } else {
-      noticeEl.style.display = "block";
-      noticeEl.textContent =
-        `ℹ️ Nenhuma fase foi ajustada.\n` +
-        `• Isso geralmente acontece quando os dados antigos não possuem "elapsed/targets/cps/chars" suficientes.\n` +
-        `• Sem esses campos, o sistema não consegue aplicar teto por tempo de forma justa.`;
-    }
-
-    // export context (sempre final)
     exportContext = {
       studentUid,
-      nome: user.nome || "",
-      cpf: user.cpf || "",
-      average: Number(document.getElementById("avg").innerText) || (grades.average ?? 0),
-      approved: document.getElementById("status").innerText.includes("APROVADO"),
-      phases
+      nome: studentCache.nome || "",
+      cpf: studentCache.cpf || "",
+      average: gradesCache.average ?? 0,
+      approved: !!gradesCache.approved,
+      phases: phasesCache
     };
 
-    renderTable(phases);
-    renderCharts(phases);
+    renderTable(phasesCache);
+    renderCharts(phasesCache);
+
     showContent();
+    showNotice("ℹ️ Para aplicar a nova regra, clique em “Recalcular notas”. (Só o professor pode) ");
 
   } catch (err){
     console.error(err);
@@ -465,7 +423,7 @@ async function loadStudent(){
 }
 
 /* ============================
-   TABLE
+   TABLE + CHARTS
    ============================ */
 function renderTable(phases){
   const body = document.getElementById("phases-body");
@@ -486,10 +444,8 @@ function renderTable(phases){
   `).join("");
 }
 
-/* ============================
-   CHARTS
-   ============================ */
 function renderCharts(phases){
+  if (typeof Chart === "undefined") return; // segurança
   if (scoreChartInstance) scoreChartInstance.destroy();
   if (speedChartInstance) speedChartInstance.destroy();
   if (accuracyChartInstance) accuracyChartInstance.destroy();
@@ -499,34 +455,21 @@ function renderCharts(phases){
 
   scoreChartInstance = new Chart(document.getElementById("scoreChart"), {
     type:"line",
-    data:{
-      labels,
-      datasets:[{
-        label:"Nota",
-        data:scores,
-        borderColor:"#2563eb",
-        backgroundColor:"rgba(37,99,235,.15)",
-        tension:.3,
-        fill:true
-      }]
-    },
+    data:{ labels, datasets:[{ label:"Nota", data:scores, borderColor:"#2563eb", backgroundColor:"rgba(37,99,235,.15)", tension:.3, fill:true }] },
     options:{ responsive:true, scales:{ y:{ beginAtZero:true, max:100 } } }
   });
 
   const buckets = { "Fácil":[], "Médio":[], "Difícil":[] };
   phases.forEach(p => { if (buckets[p.difficulty]) buckets[p.difficulty].push(p); });
-  const diffLabels = Object.keys(buckets);
 
+  const diffLabels = Object.keys(buckets);
   const avgCps = diffLabels.map(d => {
-    const arr = buckets[d];
-    if (!arr.length) return 0;
+    const arr = buckets[d]; if (!arr.length) return 0;
     const sum = arr.reduce((a,b)=>a+(Number(b.cps)||0), 0);
     return Number((sum/arr.length).toFixed(2));
   });
-
   const avgAcc = diffLabels.map(d => {
-    const arr = buckets[d];
-    if (!arr.length) return 0;
+    const arr = buckets[d]; if (!arr.length) return 0;
     const sum = arr.reduce((a,b)=>a+(Number(b.accuracyPct)||0), 0);
     return Math.round(sum/arr.length);
   });
