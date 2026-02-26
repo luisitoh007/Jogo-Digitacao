@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sala de Aula - Plataforma de Ensino</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f4f6fa;
+      --sidebar-bg: #ffffff;
+      --success: #10b981;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+    /* SIDEBAR DE AULAS */
+    .sidebar {
+      width: 320px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar-header { padding: 20px; border-bottom: 1px solid #eee; }
+    .sidebar-header h2 { margin: 0; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
+
+    .lesson-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .lesson-item {
+      padding: 15px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      background: #f9fafb;
+      cursor: pointer;
+      border: 1px solid #e5e7eb;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .lesson-item:hover:not(.locked) { background: #eff6ff; border-color: var(--primary); }
+    .lesson-item.active { background: #dbeafe; border-color: var(--primary); font-weight: bold; }
+    .lesson-item.locked { opacity: 0.5; cursor: not-allowed; background: #eee; }
+    .lesson-item.completed { border-left: 5px solid var(--success); }
+
+    .exam-tag { background: #f59e0b; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+
+    /* ÁREA DO CONTEÚDO */
+    .content-area { flex: 1; display: flex; flex-direction: column; background: #fff; }
+    .content-header { padding: 15px 25px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fff; z-index: 5; }
+    
+    .viewer-container { flex: 1; background: #525659; position: relative; }
+    iframe { width: 100%; height: 100%; border: none; }
+
+    .empty-state { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; color: #9ca3af; background: var(--bg); }
+
+    .btn-back { background: #6b7280; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 0.85rem; }
+    .btn-finish { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: none; }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2 id="trilha-label">Minha Trilha</h2>
+      <div style="margin-top:10px;">
+        <a href="menu.html" class="btn-back">⬅ Voltar ao Menu</a>
+      </div>
+    </div>
+    <div class="lesson-list" id="lesson-list">
+      <p style="text-align:center; padding:20px; color:#666;">Carregando aulas...</p>
+    </div>
+  </aside>
+
+  <main class="content-area">
+    <div class="content-header">
+      <h3 id="current-title">Selecione uma atividade</h3>
+      <button id="btn-concluir" class="btn-finish" onclick="marcarConcluida()">Concluir Aula</button>
+    </div>
+    
+    <div class="viewer-container" id="viewer-container">
+      <div class="empty-state" id="empty-state">
+        <span style="font-size: 4rem;">📂</span>
+        <p>Clique em uma aula na lista lateral para visualizar o conteúdo.</p>
+      </div>
+    </div>
+  </main>
+
+<script>
+/* ==================================================
+   CONFIGURAÇÃO FIREBASE
+   ================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCr81cMa2T_iZmxy2tNOjYydSnrs3aSmtk",
+  authDomain: "jogo-digitacao.firebaseapp.com",
+  projectId: "jogo-digitacao",
+  appId: "1:903019411681:web:ea572018fb9913ca2f9fa0"
+};
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+let currentUser = null;
+let userTrilha = "";
+let aulasConcluidas = 0;
+let aulaAtualId = null;
+
+/* ==================================================
+   CONTROLE DE ACESSO E DADOS
+   ================================================== */
+auth.onAuthStateChanged(async (user) => {
+  if (!user) { window.location.href = "index.html"; return; }
+  currentUser = user;
+
+  const userDoc = await db.collection("users").doc(user.uid).get();
+  const data = userDoc.data();
+  
+  userTrilha = data.trilha || "basico";
+  aulasConcluidas = data.aulasConcluidas || 0;
+  
+  document.getElementById("trilha-label").innerText = "Trilha: " + userTrilha;
+  carregarAulasDaTrilha();
+});
+
+/* ==================================================
+   BUSCA DINÂMICA DE AULAS NO FIRESTORE
+   ================================================== */
+async function carregarAulasDaTrilha() {
+  const container = document.getElementById("lesson-list");
+  
+  try {
+    // Busca na coleção "courses" as aulas da trilha do aluno ordenadas
+    const snapshot = await db.collection("courses")
+      .where("trilha", "==", userTrilha)
+      .orderBy("ordem", "asc")
+      .get();
+
+    if (snapshot.empty) {
+      container.innerHTML = "<p style='padding:20px;'>Nenhuma aula encontrada para esta trilha.</p>";
+      return;
+    }
+
+    container.innerHTML = "";
+
+    snapshot.forEach((doc) => {
+      const aula = doc.data();
+      const idDoc = doc.id;
+      const ordemAula = Number(aula.ordem);
+
+      const div = document.createElement("div");
+      div.className = "lesson-item";
+      
+      // Regra: libera a aula se a ordem dela for menor ou igual à (última concluída + 1)
+      const bloqueada = ordemAula > (aulasConcluidas + 1);
+      
+      if (bloqueada) div.classList.add("locked");
+      if (ordemAula <= aulasConcluidas) div.classList.add("completed");
+
+      let tag = aula.tipo === "prova" ? '<span class="exam-tag">Prova</span>' : '';
+      
+      div.innerHTML = `<span>${aula.titulo}</span> ${tag}`;
+      
+      if (!bloqueada) {
+        div.onclick = () => visualizarConteudo(aula, idDoc, ordemAula);
+      }
+      
+      container.appendChild(div);
+    });
+
+  } catch (err) {
+    console.error("Erro ao carregar trilha:", err);
+    container.innerHTML = "<p style='padding:20px; color:red;'>Erro ao carregar aulas. Verifique o console.</p>";
+  }
+}
+
+/* ==================================================
+   VISUALIZAÇÃO E CONCLUSÃO
+   ================================================== */
+function visualizarConteudo(aula, id, ordem) {
+  aulaAtualId = id;
+  document.getElementById("empty-state").style.display = "none";
+  document.getElementById("current-title").innerText = aula.titulo;
+  
+  const viewer = document.getElementById("viewer-container");
+  
+  if (aula.tipo === "prova") {
+    viewer.innerHTML = `
+      <div class="empty-state">
+        <h2>📝 Momento da Avaliação</h2>
+        <p>Esta é uma prova de nível. Você precisa de 70% de acerto para liberar as próximas aulas.</p>
+        <button onclick="irParaProva('${id}')" style="background:#f59e0b; color:white; border:none; padding:15px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">INICIAR PROVA</button>
+      </div>`;
+    document.getElementById("btn-concluir").style.display = "none";
+  } else {
+    // Renderiza o PDF ou vídeo
+    viewer.innerHTML = `<iframe src="${aula.url}"></iframe>`;
+    
+    // Mostra botão de concluir apenas se for a aula que ele está "estudando" agora
+    if (ordem === (aulasConcluidas + 1)) {
+      document.getElementById("btn-concluir").style.display = "block";
+    } else {
+      document.getElementById("btn-concluir").style.display = "none";
+    }
+  }
+}
+
+async function marcarConcluida() {
+  if (!confirm("Deseja marcar esta aula como concluída e liberar a próxima?")) return;
+
+  try {
+    const novaContagem = aulasConcluidas + 1;
+    await db.collection("users").doc(currentUser.uid).update({
+      aulasConcluidas: novaContagem
+    });
+    
+    aulasConcluidas = novaContagem;
+    alert("Parabéns! Aula concluída.");
+    document.getElementById("btn-concluir").style.display = "none";
+    carregarAulasDaTrilha(); // Atualiza a lista lateral
+  } catch (e) {
+    alert("Erro ao salvar progresso.");
+  }
+}
+
+function irParaProva(id) {
+  window.location.href = `prova.html?id=${id}&trilha=${userTrilha}`;
+}
+</script>
+</body>
+</html>
